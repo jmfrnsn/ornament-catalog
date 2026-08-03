@@ -1,0 +1,394 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #fafaf5;
+  --cream: #fffebb;
+  --ink: #27301c;
+  --highlight: #f2f2e9;
+  --highlight-cursor: #e6e6dc;
+  /* Vermillion accent for catalog fig labels (Flint-card reference). */
+  --fig: #e24a3c;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-cream: var(--cream);
+  --color-ink: var(--ink);
+  --color-highlight: var(--highlight);
+  --color-highlight-cursor: var(--highlight-cursor);
+  --color-fig: var(--fig);
+  --font-display: var(--font-display);
+  --font-serif: var(--font-serif);
+  --font-mono: var(--font-mono);
+  --font-sans: ui-sans-serif, system-ui, "Helvetica Neue", Helvetica, Arial,
+    sans-serif;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.font-display {
+  font-family: var(--font-display), "Snell Roundhand", cursive;
+}
+
+.font-serif {
+  font-family: var(--font-serif), "TeXGyreSchola-Regular", "Times New Roman",
+    serif;
+  letter-spacing: -0.04375rem;
+}
+
+.font-mono {
+  font-family: var(--font-mono), "PP Supply Mono", ui-monospace, monospace;
+}
+
+.sliding-row-highlight {
+  transition:
+    transform 320ms ease,
+    height 320ms ease,
+    opacity 180ms ease;
+}
+
+.ornament-index-list-rows .sliding-row-highlight {
+  transition:
+    transform 160ms ease,
+    height 160ms ease,
+    opacity 100ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sliding-row-highlight {
+    transition: none;
+  }
+}
+
+.ornament-plate-image {
+  mix-blend-mode: multiply;
+}
+
+/* Field-journal index: one rule color; all lines are CSS borders (equal weight) */
+.ornament-index {
+  --index-rule: color-mix(in srgb, var(--ink) 10%, transparent);
+  /* List Era column aligns to head filter track via cqi */
+  container-type: inline-size;
+  container-name: ornament-index;
+}
+
+/* Lab specimen iframe — catalog fills the frame (not the page). */
+[data-ornament-embed] {
+  box-sizing: border-box;
+  min-height: 100%;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+[data-ornament-embed] .ornament-index {
+  left: auto !important;
+  right: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  transform: none !important;
+  padding-bottom: 0;
+  margin: 0;
+}
+
+[data-ornament-embed] .ornament-index-grid,
+[data-ornament-embed] .ornament-index-head {
+  width: 100%;
+  max-width: 100%;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Specimen frame already borders the box — no inset grid rails. */
+  border-left: none;
+  border-right: none;
+}
+
+[data-ornament-embed] .ornament-index-cell {
+  border-right: 1px solid var(--index-rule);
+}
+
+[data-ornament-embed] .ornament-index-cell:nth-child(2n) {
+  border-right: 1px solid var(--index-rule);
+}
+
+[data-ornament-embed] .ornament-index-cell:nth-child(4n) {
+  border-right: none;
+}
+
+[data-ornament-embed] .ornament-index-head-cell {
+  padding: 0.75rem 1.25rem 1rem;
+}
+
+[data-ornament-embed] .ornament-index-head-cell.is-flush-left {
+  padding-left: 1.25rem;
+}
+
+.ornament-index-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  background-color: transparent;
+  border-left: 1px solid var(--index-rule);
+  border-right: 1px solid var(--index-rule);
+}
+
+.ornament-index-cell {
+  background-color: var(--paper);
+  min-height: 0;
+  border-bottom: 1px solid var(--index-rule);
+}
+
+/* Header tracks match the specimen grid exactly */
+.ornament-index-head {
+  display: grid;
+  grid-template-columns: 1fr;
+  border-bottom: 1px solid var(--index-rule);
+}
+
+.ornament-index-head-cell {
+  padding: 0 1.5rem 1.25rem;
+}
+
+.ornament-index-head-cell.is-flush-left {
+  padding-left: 0;
+}
+
+@media (min-width: 640px) {
+  .ornament-index-grid,
+  .ornament-index-head {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ornament-index-cell {
+    border-right: 1px solid var(--index-rule);
+  }
+
+  .ornament-index-cell:nth-child(2n) {
+    border-right: none;
+  }
+
+  .ornament-index-head-cell {
+    padding: 0 2rem 1.5rem;
+  }
+
+  .ornament-index-head-cell.is-flush-left {
+    padding-left: 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .ornament-index-grid,
+  .ornament-index-head {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .ornament-index-cell:nth-child(2n) {
+    border-right: 1px solid var(--index-rule);
+  }
+
+  .ornament-index-cell:nth-child(4n) {
+    border-right: none;
+  }
+}
+
+/* Index list: same border language as the grid */
+.ornament-index-list {
+  --index-list-preview: min(32vw, 22rem);
+  width: 100%;
+}
+
+.ornament-index-list-frame {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--index-list-preview);
+  align-items: stretch;
+  border-left: 1px solid var(--index-rule);
+  border-right: 1px solid var(--index-rule);
+  border-bottom: 1px solid var(--index-rule);
+}
+
+.ornament-index-list-main {
+  min-width: 0;
+  border-right: 1px solid var(--index-rule);
+  background: var(--paper);
+}
+
+.ornament-index-list-cols,
+.ornament-index-list-link {
+  --index-list-pad: 1.5rem;
+  /* Lead track = one head column so Era lines up with filters */
+  --index-list-lead: calc(25cqi - var(--index-list-pad));
+  display: grid;
+  grid-template-columns:
+    var(--index-list-lead)
+    minmax(6rem, 1.2fr)
+    7.5rem
+    minmax(6rem, 1.2fr);
+  align-items: center;
+  column-gap: 0;
+}
+
+.ornament-index-list-cols {
+  border-bottom: 1px solid var(--index-rule);
+  padding: 0.65rem var(--index-list-pad);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 300;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ink) 55%, transparent);
+}
+
+.ornament-index-list-cols > span,
+.ornament-index-list-link > span {
+  min-width: 0;
+  padding-inline: 0.5rem;
+}
+
+.ornament-index-list-cols > span:first-child,
+.ornament-index-list-link > span:first-child,
+.ornament-index-list-cols > span:nth-child(2),
+.ornament-index-list-link > span:nth-child(2) {
+  padding-inline: 0;
+}
+
+.ornament-index-list-lead {
+  display: grid;
+  grid-template-columns: 2.5rem 2.75rem;
+  justify-content: start;
+  align-items: center;
+  justify-items: center;
+  column-gap: 0.75rem;
+  min-width: 0;
+}
+
+.ornament-index-list-num {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 300;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+  color: color-mix(in srgb, var(--ink) 45%, transparent);
+}
+
+.ornament-index-list-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ornament-index-list-row {
+  border-bottom: 1px solid var(--index-rule);
+  background: transparent;
+}
+
+.ornament-index-list-row:last-child {
+  border-bottom: none;
+}
+
+.ornament-index-list-link {
+  min-height: 3.5rem;
+  padding-block: 0.55rem;
+  padding-inline: var(--index-list-pad);
+  color: inherit;
+  text-decoration: none;
+}
+
+.ornament-index-list-thumb {
+  position: relative;
+  display: block;
+  width: 2rem;
+  height: 2.5rem;
+  overflow: hidden;
+}
+
+.ornament-index-list-meta {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 300;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ink) 55%, transparent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ornament-index-list-preview {
+  position: sticky;
+  top: 5.5rem;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 7rem);
+  max-height: 42rem;
+  min-height: 18rem;
+  padding: 1.5rem 2rem;
+  background: var(--paper);
+}
+
+.ornament-index-list-preview-inner {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+@media (max-width: 1023px) {
+  .ornament-index-list {
+    --index-list-preview: min(36vw, 16rem);
+  }
+
+  .ornament-index-list-cols,
+  .ornament-index-list-link {
+    /* Head is 2 cols below lg → lead = first head column */
+    --index-list-pad: 1.25rem;
+    --index-list-lead: calc(50cqi - var(--index-list-pad));
+    grid-template-columns:
+      var(--index-list-lead)
+      minmax(5rem, 1.2fr)
+      7rem;
+  }
+}
+
+@media (max-width: 639px) {
+  .ornament-index-list-cols,
+  .ornament-index-list-link {
+    /* Head stacks; keep a compact lead before Era */
+    --index-list-lead: 5.5rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .ornament-index-list {
+    --index-list-preview: 0px;
+  }
+
+  .ornament-index-list-frame {
+    grid-template-columns: 1fr;
+  }
+
+  .ornament-index-list-main {
+    border-right: 0;
+  }
+
+  .ornament-index-list-cols {
+    display: none;
+  }
+
+  .ornament-index-list-link {
+    --index-list-pad: 1.25rem;
+    --index-list-lead: 5.25rem;
+    grid-template-columns:
+      var(--index-list-lead)
+      minmax(0, 1fr)
+      6.5rem;
+  }
+
+  .ornament-index-list-preview {
+    display: none;
+  }
+}
