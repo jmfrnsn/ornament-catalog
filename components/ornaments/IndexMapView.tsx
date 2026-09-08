@@ -2,8 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Map as MapLibreMap } from "maplibre-gl";
+import { Map as MapLibreMap, setWorkerUrl } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+
+if (typeof window !== "undefined") {
+  setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
+}
 
 import { OrnamentImage } from "@/components/ornaments/OrnamentImage";
 import type { OrnamentFigure } from "@/lib/ornaments/figure-catalog";
@@ -190,9 +194,11 @@ export function IndexMapView({
       const view = viewRef.current;
       applyCatalogMapPaint(map);
       applyCamera(map, view.isGlobe, view.origins, true);
+      map.resize();
       setMapReady(true);
       syncPins();
     });
+    map.on("load", () => map.resize());
     map.on("move", syncPins);
 
     const observer = new ResizeObserver(() => map.resize());

@@ -11,7 +11,8 @@
     "digest-source": "tsx scripts/digest-source.ts",
     "sync-notion-ornaments": "tsx scripts/sync-notion-ornaments.ts",
     "sync-ornaments-and-push": "tsx scripts/sync-ornaments-and-push.ts",
-    "daily-ornament-agent": "tsx scripts/daily-ornament-agent.ts"
+    "daily-ornament-agent": "tsx scripts/daily-ornament-agent.ts",
+    "postinstall": "mkdir -p public/maplibre && cp node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs public/maplibre/"
   },
   "dependencies": {
     "@notionhq/client": "^5.23.2",
