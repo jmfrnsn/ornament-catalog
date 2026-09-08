@@ -31,7 +31,11 @@ function readPendingArchiveIds() {
 
 function writePendingArchiveIds(ids: Set<string>) {
   if (typeof window === "undefined") return;
-  window.sessionStorage.setItem(PENDING_ARCHIVE_KEY, JSON.stringify([...ids]));
+  try {
+    window.sessionStorage.setItem(PENDING_ARCHIVE_KEY, JSON.stringify([...ids]));
+  } catch {
+    // Storage is unavailable in privacy-restricted and embedded previews.
+  }
 }
 
 export function SourceList({ sources, embed = false }: SourceListProps) {

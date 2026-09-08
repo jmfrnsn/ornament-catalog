@@ -154,6 +154,16 @@ body {
   padding-left: 0;
 }
 
+.ornament-index-display { white-space: nowrap; }
+.ornament-index-display button { min-height: 44px; }
+
+@media (max-width: 639px) {
+  .ornament-index-head { grid-template-columns: 1fr; }
+  .ornament-index-head-cell.is-flush-left { padding-left: 1.5rem; }
+  .ornament-index-display { grid-column: 1 / -1; padding-bottom: .75rem; }
+  [data-ornament-embed] .ornament-index-head { grid-template-columns: 1fr; }
+}
+
 @media (min-width: 640px) {
   .ornament-index-grid,
   .ornament-index-head {

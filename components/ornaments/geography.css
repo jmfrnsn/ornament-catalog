@@ -1,0 +1,50 @@
+/* Extend the catalog's existing paper, ink, serif, mono and hairline system. */
+.ornament-geography {
+  --geo-muted: color-mix(in srgb, var(--ink) 72%, var(--paper));
+  --geo-land: color-mix(in srgb, var(--ink) 5%, var(--paper));
+  --geo-selected: color-mix(in srgb, var(--ink) 23%, var(--paper));
+  --geo-xs: .75rem;
+  border-bottom: 1px solid var(--index-rule);
+}
+.ornament-geo-layout { height: clamp(560px, 72vh, 780px); }
+.ornament-geo-atlas { height: 100%; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.ornament-geo-canvas { position: relative; display: flex; align-items: center; flex: 1; min-height: 0; overflow: hidden; touch-action: none; }
+.ornament-geo-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+.ornament-geo-svg:active { cursor: grabbing; }
+.ornament-geo-sphere { fill: var(--paper); stroke: var(--index-rule); stroke-width: 1; }
+.ornament-geo-graticule { fill: none; stroke: var(--ink); stroke-opacity: .07; stroke-width: .65; }
+.ornament-geo-country { fill: var(--geo-land); stroke: var(--paper); stroke-width: .8; stroke-linejoin: round; }
+.ornament-geo-country.has-origins { fill: var(--geo-selected); cursor: pointer; stroke: var(--paper); }
+.ornament-geo-country.is-active, .ornament-geo-country.has-origins:hover { fill: color-mix(in srgb, var(--ink) 42%, var(--paper)); }
+.ornament-geo-pin { pointer-events: none; }
+.ornament-geo-pin path { fill: none; stroke: var(--ink); stroke-width: .8; stroke-opacity: .32; }
+.ornament-geo-pin circle { fill: var(--ink); }
+.ornament-geo-pin.is-active circle { fill: var(--fig); }
+.ornament-geo-labels { position: absolute; inset: 0; pointer-events: none; }
+.ornament-geo-label { position: absolute; pointer-events: auto; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid color-mix(in srgb, var(--paper) 22%, var(--ink)); border-radius: 3px; background: var(--ink); color: var(--paper); box-shadow: 0 3px 6px #27301c20, 0 10px 24px #27301c24; font: 300 11px var(--font-mono), monospace; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; cursor: pointer; transition: border-color 180ms ease-out, box-shadow 180ms ease-out; }
+.ornament-geo-label.is-compact { font-size: 10px; }
+.ornament-geo-label-name { flex: 1; text-align: left; }
+.ornament-geo-label-dot { flex-shrink: 0; width: 5px; height: 5px; border-radius: 50%; background: color-mix(in srgb, var(--paper) 70%, var(--ink)); }
+.ornament-geo-label-count { border-left: 1px solid color-mix(in srgb, var(--paper) 25%, var(--ink)); padding-left: 9px; }
+.ornament-geo-label:hover, .ornament-geo-label.is-active { border-color: color-mix(in srgb, var(--paper) 55%, var(--ink)); box-shadow: 0 4px 8px #27301c24, 0 12px 28px #27301c30; }
+.ornament-geo-label.is-active .ornament-geo-label-dot { background: var(--fig); box-shadow: 0 0 8px #e24a3c44; }
+.ornament-geography button:focus-visible, .ornament-geography a:focus-visible, .ornament-geo-svg:focus-visible {
+  outline: 2px solid var(--ink); outline-offset: -3px;
+}
+.ornament-geography .ornament-geo-label:focus-visible { outline: 2px solid var(--fig); outline-offset: 3px; }
+.ornament-geo-controls { position: absolute; left: 1.5rem; bottom: 1.5rem; display: flex; border: 1px solid var(--index-rule); border-radius: 3px; background: var(--paper); box-shadow: 0 3px 8px #27301c12, 0 10px 24px #27301c0c; }
+.ornament-geo-controls button { min-width: 44px; min-height: 44px; cursor: pointer; font-family: var(--font-mono), monospace; font-size: 1rem; }
+.ornament-geo-controls button + button { border-left: 1px solid var(--index-rule); }
+.ornament-geo-controls .ornament-geo-reset { padding-inline: 1rem; font-size: var(--geo-xs); text-transform: uppercase; }
+.ornament-geo-controls button:hover { background: var(--highlight); }
+.ornament-geo-controls button:disabled { opacity: .35; cursor: default; }
+.ornament-geo-credit { position: absolute; right: 1.5rem; bottom: 1.5rem; font: 300 10px var(--font-mono), monospace; text-transform: uppercase; color: var(--geo-muted); text-decoration: underline; text-underline-offset: 3px; }
+.ornament-geo-empty { position: absolute; left: 10%; right: 10%; top: 40%; padding: 1.5rem; text-align: center; background: var(--paper); font: 400 1rem/1.6 var(--font-serif), serif; }
+@container ornament-index (max-width: 700px) {
+  .ornament-geo-layout { height: clamp(380px, 90cqw, 540px); }
+  .ornament-geo-controls { left: 1.25rem; bottom: 1rem; }
+  .ornament-geo-credit { right: 1.25rem; bottom: 1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ornament-geo-label { transition: none; }
+}

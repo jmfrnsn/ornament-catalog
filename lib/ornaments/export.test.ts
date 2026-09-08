@@ -35,6 +35,7 @@ test("ornament export is deterministic across writes", async () => {
     year: "1901",
     type: "The Met",
     era: "Victorian",
+    region: undefined,
     url: "https://example.com/b",
     filePath: "https://images.example.com/b.jpg",
     notionPageId: "page-b",
