@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { animate, AnimatePresence, motion, useInView, useReducedMotion } from "motion/react";
 import { geoDistance, geoGraticule10, geoMercator, geoOrthographic, geoPath } from "d3-geo";
 import { feature } from "topojson-client";
@@ -11,7 +11,7 @@ import world from "world-atlas/countries-110m.json";
 import type { OrnamentFigure } from "@/lib/ornaments/figure-catalog";
 import { geographicDisplayMode, groupFigureOrigins, type OriginGroup } from "@/lib/ornaments/geography";
 import { createGeographyLabelLayout, geographyLabelConnector, projectGeographyLabels } from "@/lib/ornaments/geography-labels";
-import { rotateGeographyByPixels } from "@/lib/ornaments/geography-camera";
+import { geographyPinch, pinchGeographyCamera, rotateGeographyByPixels, type GeographyCamera, type GeographyPinch, type GeographyPoint } from "@/lib/ornaments/geography-camera";
 import "./geography.css";
 
 const topology = world as unknown as Topology<{ countries: GeometryCollection<{ name: string }> }>;
@@ -24,6 +24,7 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 type Props = {
   figures: OrnamentFigure[];
 };
+type SafariGestureEvent = Event & { clientX: number; clientY: number; scale: number };
 
 function mainPolygon(country: Feature<Geometry>) {
   if (country.geometry.type !== "MultiPolygon") return country;
@@ -61,12 +62,20 @@ function GeographyPanel({
   const canvasRef = useRef<HTMLDivElement>(null);
   const inView = useInView(canvasRef, { amount: .15 });
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
-  const [rotation, setRotation] = useState<[number, number]>(BASE_ROTATION);
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState<[number, number]>([0, 0]);
+  const [camera, setCamera] = useState<GeographyCamera>({ rotation: BASE_ROTATION, zoom: 1, pan: [0, 0] });
+  const { rotation, zoom, pan } = camera;
+  // Synchronous snapshots keep sequential touch events from reading stale React state.
+  const cameraRef = useRef(camera);
+  function updateCamera(next: GeographyCamera) {
+    cameraRef.current = next;
+    setCamera(next);
+  }
   const cameraAnimation = useRef<{ stop: () => void } | null>(null);
   useEffect(() => () => cameraAnimation.current?.stop(), []);
-  const drag = useRef<{ x: number; y: number; rotation: [number, number]; pan: [number, number]; radius: number; moved: boolean } | null>(null);
+  const pointers = useRef(new Map<number, { point: GeographyPoint; target: Element }>());
+  const drag = useRef<{ point: GeographyPoint; camera: GeographyCamera; radius: number; target: Element; moved: boolean } | null>(null);
+  const pinch = useRef<{ camera: GeographyCamera; geometry: GeographyPinch } | null>(null);
+  const safariPinch = useRef<{ camera: GeographyCamera; geometry: GeographyPinch } | null>(null);
   const suppressClick = useRef(false);
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -99,7 +108,7 @@ function GeographyPanel({
     if (isGlobe) {
       return geoOrthographic()
         .rotate([rotation[0], rotation[1], 0])
-        .translate([WIDTH / 2, HEIGHT / 2])
+        .translate([WIDTH / 2 + pan[0], HEIGHT / 2 + pan[1]])
         .scale(Math.min(WIDTH, HEIGHT) * .43 * zoom)
         .clipExtent([[0, 0], [WIDTH, HEIGHT]]);
     }
@@ -129,11 +138,14 @@ function GeographyPanel({
 
   function moveCamera(targetRotation: [number, number], targetZoom: number, targetPan: [number, number]) {
     cameraAnimation.current?.stop();
-    const longitude = rotation[0] + ((targetRotation[0] - rotation[0]) % 360 + 540) % 360 - 180;
+    const start = cameraRef.current;
+    const longitude = start.rotation[0] + ((targetRotation[0] - start.rotation[0]) % 360 + 540) % 360 - 180;
     const update = (t: number) => {
-      setRotation([rotation[0] + (longitude - rotation[0]) * t, rotation[1] + (targetRotation[1] - rotation[1]) * t]);
-      setZoom(zoom + (targetZoom - zoom) * t);
-      setPan([pan[0] + (targetPan[0] - pan[0]) * t, pan[1] + (targetPan[1] - pan[1]) * t]);
+      updateCamera({
+        rotation: [start.rotation[0] + (longitude - start.rotation[0]) * t, start.rotation[1] + (targetRotation[1] - start.rotation[1]) * t],
+        zoom: start.zoom + (targetZoom - start.zoom) * t,
+        pan: [start.pan[0] + (targetPan[0] - start.pan[0]) * t, start.pan[1] + (targetPan[1] - start.pan[1]) * t],
+      });
     };
     if (reduceMotion) update(1);
     else cameraAnimation.current = animate(0, 1, { duration: .65, ease: [.22, 1, .36, 1], onUpdate: update });
@@ -166,22 +178,121 @@ function GeographyPanel({
 
   function changeZoom(delta: number) {
     cameraAnimation.current?.stop();
-    const nextZoom = clamp(zoom + delta, .75, MAX_ZOOM);
-    setZoom(nextZoom);
-    if (!isGlobe) setPan([pan[0] * nextZoom / zoom, pan[1] * nextZoom / zoom]);
+    const current = cameraRef.current;
+    const nextZoom = clamp(current.zoom + delta, .75, MAX_ZOOM);
+    updateCamera({ ...current, zoom: nextZoom, pan: [current.pan[0] * nextZoom / current.zoom, current.pan[1] * nextZoom / current.zoom] });
   }
 
   function moveView(x: number, y: number) {
     cameraAnimation.current?.stop();
-    if (isGlobe) setRotation(value => rotateGeographyByPixels(value, x, y, projection.scale()));
-    else setPan(([px, py]) => [clamp(px + x, -WIDTH * zoom, WIDTH * zoom), clamp(py + y, -HEIGHT * zoom, HEIGHT * zoom)]);
+    const current = cameraRef.current;
+    if (isGlobe) updateCamera({ ...current, rotation: rotateGeographyByPixels(current.rotation, x, y, projection.scale()) });
+    else updateCamera({ ...current, pan: [clamp(current.pan[0] + x, -WIDTH * zoom, WIDTH * zoom), clamp(current.pan[1] + y, -HEIGHT * zoom, HEIGHT * zoom)] });
   }
+
+  function localPoint(clientX: number, clientY: number): GeographyPoint {
+    const box = canvasRef.current!.getBoundingClientRect();
+    return [(clientX - box.left) * WIDTH / box.width, (clientY - box.top) * HEIGHT / box.height];
+  }
+
+  function beginGesture() {
+    const active = [...pointers.current.values()];
+    if (active.length >= 2) {
+      pinch.current = { camera: cameraRef.current, geometry: geographyPinch(active[0].point, active[1].point) };
+      drag.current = null;
+      suppressClick.current = true;
+    } else if (active.length === 1) {
+      pinch.current = null;
+      drag.current = { ...active[0], camera: cameraRef.current, radius: Math.min(WIDTH, HEIGHT) * .43 * cameraRef.current.zoom, moved: suppressClick.current };
+    } else {
+      pinch.current = null;
+      drag.current = null;
+    }
+  }
+
+  function pointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.button !== 0 || (event.target as Element).closest(".ornament-geo-controls, a")) return;
+    cameraAnimation.current?.stop();
+    safariPinch.current = null;
+    if (!pointers.current.size) suppressClick.current = false;
+    pointers.current.set(event.pointerId, { point: localPoint(event.clientX, event.clientY), target: event.target as Element });
+    event.currentTarget.setPointerCapture(event.pointerId);
+    beginGesture();
+  }
+
+  function pointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const pointer = pointers.current.get(event.pointerId);
+    if (!pointer) return;
+    pointer.point = localPoint(event.clientX, event.clientY);
+    if (pinch.current) {
+      const active = [...pointers.current.values()];
+      updateCamera(pinchGeographyCamera(pinch.current.camera, pinch.current.geometry, geographyPinch(active[0].point, active[1].point), [WIDTH / 2, HEIGHT / 2]));
+    } else if (drag.current) {
+      const start = drag.current;
+      const dx = pointer.point[0] - start.point[0], dy = pointer.point[1] - start.point[1];
+      if (Math.abs(dx) + Math.abs(dy) > 4) { start.moved = true; suppressClick.current = true; }
+      if (isGlobe) updateCamera({ ...start.camera, rotation: rotateGeographyByPixels(start.camera.rotation, dx, dy, start.radius) });
+      else updateCamera({ ...start.camera, pan: [clamp(start.camera.pan[0] + dx, -WIDTH * zoom, WIDTH * zoom), clamp(start.camera.pan[1] + dy, -HEIGHT * zoom, HEIGHT * zoom)] });
+    }
+  }
+
+  function pointerEnd(event: ReactPointerEvent<HTMLDivElement>, cancelled = false) {
+    if (!pointers.current.has(event.pointerId)) return;
+    const start = drag.current;
+    if (cancelled) suppressClick.current = true;
+    if (!cancelled && start && !start.moved && !suppressClick.current && pointers.current.size === 1) {
+      const code = start.target.closest<HTMLElement>("[data-region-code]")?.dataset.regionCode;
+      const point = projection.invert?.(localPoint(event.clientX, event.clientY));
+      const group = groups.find(group => code ? group.region.code === code : point && geoDistance(point, group.region.coordinates) < .08);
+      if (group) chooseRegion(group);
+    }
+    pointers.current.delete(event.pointerId);
+    // Rebase at the current camera before resuming a one-finger drag or changing fingers.
+    beginGesture();
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+
+  const wheelGesture = useEffectEvent((event: WheelEvent) => {
+    if (!event.ctrlKey) return; // Ordinary scrolling still scrolls the page.
+    event.preventDefault();
+    if (safariPinch.current || pointers.current.size) return;
+    cameraAnimation.current?.stop();
+    const point = localPoint(event.clientX, event.clientY);
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? HEIGHT : 1;
+    const factor = Math.exp(clamp(-event.deltaY * unit * .01, -1, 1));
+    updateCamera(pinchGeographyCamera(cameraRef.current, { midpoint: point, distance: 1 }, { midpoint: point, distance: factor }, [WIDTH / 2, HEIGHT / 2]));
+  });
+  const safariGesture = useEffectEvent((raw: Event) => {
+    const event = raw as SafariGestureEvent;
+    event.preventDefault();
+    if (pointers.current.size) return; // Do not process iOS touch pinches twice.
+    const point = event.clientX || event.clientY ? localPoint(event.clientX, event.clientY) : [WIDTH / 2, HEIGHT / 2] as GeographyPoint;
+    if (event.type === "gesturestart") {
+      cameraAnimation.current?.stop();
+      safariPinch.current = { camera: cameraRef.current, geometry: { midpoint: point, distance: event.scale || 1 } };
+    } else if (event.type === "gesturechange" && safariPinch.current) {
+      updateCamera(pinchGeographyCamera(safariPinch.current.camera, safariPinch.current.geometry, { midpoint: point, distance: event.scale }, [WIDTH / 2, HEIGHT / 2]));
+    } else if (event.type === "gestureend") safariPinch.current = null;
+  });
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.addEventListener("wheel", wheelGesture, { passive: false });
+    for (const name of ["gesturestart", "gesturechange", "gestureend"]) canvas.addEventListener(name, safariGesture, { passive: false });
+    return () => {
+      canvas.removeEventListener("wheel", wheelGesture);
+      for (const name of ["gesturestart", "gesturechange", "gestureend"]) canvas.removeEventListener(name, safariGesture);
+    };
+  }, []);
 
   return (
     <section className="ornament-geography" aria-label="Ornament origins" data-testid="geography-view" data-mode={mode} data-zoom={zoom.toFixed(3)}>
       <div className="ornament-geo-layout">
         <div className="ornament-geo-atlas">
-          <div className="ornament-geo-canvas" ref={canvasRef}>
+          <div className="ornament-geo-canvas" ref={canvasRef}
+            onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd}
+            onPointerCancel={event => pointerEnd(event, true)}
+            onLostPointerCapture={event => { if (event.target === event.currentTarget) pointerEnd(event, true); }}>
             <svg
               viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
               className="ornament-geo-svg"
@@ -199,39 +310,6 @@ function GeographyPanel({
                 if (event.key === "-") { event.preventDefault(); changeZoom(-.25); }
                 if (event.key === "Home") { event.preventDefault(); resetView(); }
               }}
-              onPointerDown={(event) => {
-                if (event.button !== 0 || (event.target as Element).closest('[role="button"]')) return;
-                cameraAnimation.current?.stop();
-                event.currentTarget.setPointerCapture(event.pointerId);
-                suppressClick.current = false;
-                drag.current = { x: event.clientX, y: event.clientY, rotation, pan, radius: projection.scale(), moved: false };
-              }}
-              onPointerMove={(event) => {
-                const start = drag.current;
-                if (!start) return;
-                const scale = 1 / (event.currentTarget.getScreenCTM()?.a ?? 1);
-                const dx = (event.clientX - start.x) * scale;
-                const dy = (event.clientY - start.y) * scale;
-                if (Math.abs(dx) + Math.abs(dy) > 4) start.moved = true;
-                if (isGlobe) setRotation(rotateGeographyByPixels(start.rotation, dx, dy, start.radius));
-                else setPan([clamp(start.pan[0] + dx, -WIDTH * zoom, WIDTH * zoom), clamp(start.pan[1] + dy, -HEIGHT * zoom, HEIGHT * zoom)]);
-              }}
-              onPointerUp={(event) => {
-                suppressClick.current = Boolean(drag.current?.moved);
-                if (drag.current && !drag.current.moved) {
-                  const matrix = event.currentTarget.getScreenCTM();
-                  const local = matrix && new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
-                  const point = local && projection.invert?.([local.x, local.y]);
-                  // Floating labels provide keyboard-accessible country selection.
-                  if (point) {
-                    const nearest = groups.find((group) => geoDistance(point, group.region.coordinates) < 0.08);
-                    if (nearest) chooseRegion(nearest);
-                  }
-                }
-                drag.current = null;
-                if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-              }}
-              onPointerCancel={() => { drag.current = null; }}
             >
               <title>{isGlobe ? "Globe" : "Map"} of regional ornament attributions</title>
               <defs>
@@ -246,6 +324,7 @@ function GeographyPanel({
                   return (
                     <path
                       key={code}
+                      data-region-code={group ? code : undefined}
                       d={path(country) ?? ""}
                       className={`ornament-geo-country${group ? " has-origins" : ""}${code === activeCode ? " is-active" : ""}`}
                       onClick={group ? () => { if (!suppressClick.current) chooseRegion(group); } : undefined}
@@ -277,12 +356,13 @@ function GeographyPanel({
                     aria-label={`${group.region.name}, ${group.items.length} specimens`}
                     aria-pressed={selectedCode === code}
                     data-testid={`map-marker-${code}`}
+                    data-region-code={code}
                     initial={reduceMotion ? false : { opacity: 0, scale: .86 }}
                     animate={reveal}
                     exit={{ opacity: 0, scale: reduceMotion ? 1 : .94, transition: { duration: reduceMotion ? 0 : .12 } }}
                     transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 340, damping: 24, delay: index * .025 }}
                     whileTap={reduceMotion ? undefined : { scale: .97 }}
-                    onClick={() => chooseRegion(group)}
+                    onClick={event => { if (event.detail === 0 || !suppressClick.current) chooseRegion(group); }}
                   >
                     <span className="ornament-geo-label-dot" aria-hidden="true" />
                     <span className="ornament-geo-label-name">{group.region.name}</span>
@@ -301,7 +381,7 @@ function GeographyPanel({
               <button type="button" className="ornament-geo-reset" onClick={resetView}>Reset</button>
             </motion.div>
             <a className="ornament-geo-credit" href="https://www.naturalearthdata.com/" target="_blank" rel="noreferrer">Natural Earth</a>
-            <span className="sr-only" id={`${id}-instructions`}>{isGlobe ? "Drag to rotate" : "Drag to pan"}. Arrow keys move the view, plus and minus zoom, and Home resets.</span>
+            <span className="sr-only" id={`${id}-instructions`}>{isGlobe ? "Drag to rotate" : "Drag to pan"}. Pinch with two fingers to zoom. Arrow keys move the view, plus and minus zoom, and Home resets.</span>
           </div>
         </div>
 

@@ -1,7 +1,39 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { geoOrthographic } from "d3-geo";
-import { rotateGeographyByPixels } from "./geography-camera";
+import { geographyPinch, pinchGeographyCamera, rotateGeographyByPixels, type GeographyCamera } from "./geography-camera";
+
+test("pinch geometry tracks distance and midpoint without finger-order dependence", () => {
+  assert.deepEqual(geographyPinch([10, 20], [70, 100]), { midpoint: [40, 60], distance: 100 });
+  assert.deepEqual(geographyPinch([10, 20], [70, 100]), geographyPinch([70, 100], [10, 20]));
+});
+
+test("pinch zoom preserves the point between fingers, including a moving midpoint", () => {
+  const camera: GeographyCamera = { rotation: [-12, -42], zoom: 2, pan: [21, -37] };
+  const center: [number, number] = [720, 324];
+  const start = geographyPinch([400, 200], [500, 200]);
+  for (const factor of [.1, .5, 1, 2, 10]) {
+    const current = { midpoint: [480, 250] as [number, number], distance: start.distance * factor };
+    const next = pinchGeographyCamera(camera, start, current, center);
+    // Any projected geography point transforms by the same scale/translation.
+    const ratio = next.zoom / camera.zoom;
+    const projected = start.midpoint.map((value, axis) =>
+      center[axis] + next.pan[axis] + (value - center[axis] - camera.pan[axis]) * ratio);
+    assert.deepEqual(projected, current.midpoint);
+    assert.deepEqual(next.rotation, camera.rotation);
+    assert.ok(next.zoom >= .75 && next.zoom <= 8);
+  }
+});
+
+test("pinching out and back restores the camera without cumulative drift", () => {
+  const camera: GeographyCamera = { rotation: [20, -50], zoom: 2, pan: [-11, 42] };
+  const center: [number, number] = [187.5, 190];
+  const start = geographyPinch([100, 150], [200, 150]);
+  const end = geographyPinch([90, 180], [290, 180]);
+  const expanded = pinchGeographyCamera(camera, start, end, center);
+  assert.deepEqual(pinchGeographyCamera(expanded, end, start, center), camera);
+  assert.ok(pinchGeographyCamera(camera, geographyPinch([0, 0], [0, 0]), end, center).pan.every(Number.isFinite));
+});
 
 test("globe drag sensitivity decreases in inverse proportion to zoom", () => {
   const rotation: [number, number] = [-12, -42];
