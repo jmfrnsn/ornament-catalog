@@ -11,7 +11,11 @@ if (typeof window !== "undefined") {
 
 import { OrnamentImage } from "@/components/ornaments/OrnamentImage";
 import type { OrnamentFigure } from "@/lib/ornaments/figure-catalog";
-import { applyCatalogMapPaint, catalogMapStyle } from "@/lib/ornaments/map-style";
+import {
+  applyCatalogMapPaint,
+  catalogMapStyle,
+  transformCatalogMapRequest,
+} from "@/lib/ornaments/map-style";
 import {
   originCameraLngLat,
   originClusterKey,
@@ -183,6 +187,7 @@ export function IndexMapView({
       maxPitch: 0,
       attributionControl: { compact: true },
       canvasContextAttributes: { antialias: true },
+      transformRequest: transformCatalogMapRequest,
     });
     mapRef.current = map;
 
