@@ -497,3 +497,35 @@ export function originCentroidRotation(
   const lat = (Math.atan2(z, hyp) * 180) / Math.PI;
   return [-lng, -lat];
 }
+
+/**
+ * MultiPoint used to fit a regional map. Includes padded corners so a
+ * two-city selection still shows surrounding land.
+ */
+export function originFitGeometry(
+  origins: Pick<OrnamentOrigin, "lat" | "lng">[],
+): GeoJSON.MultiPoint {
+  const lats = origins.map((origin) => origin.lat);
+  const lngs = origins.map((origin) => origin.lng);
+  let minLat = Math.min(...lats);
+  let maxLat = Math.max(...lats);
+  let minLng = Math.min(...lngs);
+  let maxLng = Math.max(...lngs);
+  const latPad = Math.max(8, (maxLat - minLat) * 0.5 || 12);
+  const lngPad = Math.max(10, (maxLng - minLng) * 0.5 || 14);
+  minLat = Math.max(-80, minLat - latPad);
+  maxLat = Math.min(80, maxLat + latPad);
+  minLng -= lngPad;
+  maxLng += lngPad;
+
+  return {
+    type: "MultiPoint",
+    coordinates: [
+      ...origins.map((origin) => [origin.lng, origin.lat] as [number, number]),
+      [minLng, minLat],
+      [maxLng, minLat],
+      [maxLng, maxLat],
+      [minLng, maxLat],
+    ],
+  };
+}

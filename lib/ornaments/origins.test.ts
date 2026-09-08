@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveOrnamentOrigin } from "./origins";
+import { geoEquirectangular } from "d3-geo";
+import {
+  originFitGeometry,
+  resolveOrnamentOrigin,
+} from "./origins";
 import { listExportedSources } from "./sources-export";
 import type { ExportedOrnamentSource } from "./sources-export";
 
@@ -122,5 +126,37 @@ test("every catalog source resolves to an origin", () => {
   assert.deepEqual(
     missing.map((source) => `${source.creator} — ${source.title}`),
     [],
+  );
+});
+
+test("regional map fit zooms to the selection instead of the world", () => {
+  const france = resolveOrnamentOrigin(stubSource({ region: "French" }));
+  const naples = resolveOrnamentOrigin(
+    stubSource({ creator: "Giovanni Andrea Maglioli", region: null }),
+  );
+  assert.ok(france && naples);
+
+  const geometry = originFitGeometry([france, naples]);
+  const lngs = geometry.coordinates.map((point) => point[0]);
+  const span = Math.max(...lngs) - Math.min(...lngs);
+  assert.ok(span < 80, `expected a regional lng span, got ${span}`);
+
+  const fitted = geoEquirectangular().fitExtent(
+    [
+      [48, 40],
+      [1152, 504],
+    ],
+    geometry,
+  );
+  const world = geoEquirectangular().fitExtent(
+    [
+      [48, 40],
+      [1152, 504],
+    ],
+    { type: "Sphere" },
+  );
+  assert.ok(
+    fitted.scale() > world.scale() * 3,
+    `expected a zoomed map (fitted ${fitted.scale()} vs world ${world.scale()})`,
   );
 });

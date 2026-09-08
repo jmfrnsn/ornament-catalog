@@ -10,8 +10,8 @@ import {
 } from "react";
 import {
   geoDistance,
+  geoEquirectangular,
   geoGraticule10,
-  geoNaturalEarth1,
   geoOrthographic,
   geoPath,
   type GeoPermissibleObjects,
@@ -26,6 +26,7 @@ import {
   originCentroidRotation,
   originClusterKey,
   originFanOffset,
+  originFitGeometry,
   resolveOrnamentOrigin,
   type OrnamentOrigin,
 } from "@/lib/ornaments/origins";
@@ -59,38 +60,6 @@ function sourceHref(sourceId: string, embed: boolean) {
   return embed ? `/sources/${sourceId}?embed=1` : `/sources/${sourceId}`;
 }
 
-function paddedExtent(origins: OrnamentOrigin[]): GeoJSON.Feature {
-  const lats = origins.map((origin) => origin.lat);
-  const lngs = origins.map((origin) => origin.lng);
-  let minLat = Math.min(...lats);
-  let maxLat = Math.max(...lats);
-  let minLng = Math.min(...lngs);
-  let maxLng = Math.max(...lngs);
-  const latPad = Math.max(10, (maxLat - minLat) * 0.55 || 14);
-  const lngPad = Math.max(12, (maxLng - minLng) * 0.55 || 16);
-  minLat = Math.max(-85, minLat - latPad);
-  maxLat = Math.min(85, maxLat + latPad);
-  minLng -= lngPad;
-  maxLng += lngPad;
-
-  return {
-    type: "Feature",
-    properties: {},
-    geometry: {
-      type: "Polygon",
-      coordinates: [
-        [
-          [minLng, minLat],
-          [maxLng, minLat],
-          [maxLng, maxLat],
-          [minLng, maxLat],
-          [minLng, minLat],
-        ],
-      ],
-    },
-  };
-}
-
 function buildProjection(
   width: number,
   height: number,
@@ -108,12 +77,13 @@ function buildProjection(
       .precision(0.4);
   }
 
-  const projection = geoNaturalEarth1().precision(0.4);
-  const subject = origins.length > 0 ? paddedExtent(origins) : SPHERE;
+  const projection = geoEquirectangular().precision(0.4);
+  const subject =
+    origins.length > 0 ? originFitGeometry(origins) : SPHERE;
   projection.fitExtent(
     [
-      [36, 32],
-      [width - 36, height - 48],
+      [48, 40],
+      [width - 48, height - 56],
     ],
     subject,
   );
