@@ -66,13 +66,12 @@ function GeographyPanel({
     return () => observer.disconnect();
   }, []);
   const isGlobe = mode === "globe";
-  const mappedCount = figures.length - unplaced.length;
   const selectedGroup = groups.find((group) => group.region.code === selectedCode);
   const shownItems = selectedCode === "unplaced"
     ? unplaced
     : selectedGroup?.items ?? groups.flatMap((group) => group.items).concat(unplaced);
-  const active = shownItems.find((item) => item.figure.source.id === activeId) ?? shownItems[0];
-  const activeCode = active?.region?.code;
+  const active = shownItems.find((item) => item.figure.source.id === activeId);
+  const activeCode = active?.region?.code ?? selectedGroup?.region.code;
   const displayCountry = selectedCode === "unplaced" ? "Unplaced" : selectedGroup?.region.name ?? "All regions";
   const sourceHref = (sourceId: string) => `/sources/${sourceId}${embed ? "?embed=1" : ""}`;
 
@@ -144,14 +143,6 @@ function GeographyPanel({
 
   return (
     <section className="ornament-geography" aria-label="Ornament origins" data-testid="geography-view" data-mode={mode}>
-      <div className="ornament-geo-toolbar">
-        <div>
-          <h2>Geographic index</h2>
-          <p aria-live="polite">{mappedCount} of {figures.length} specimens placed · {groups.length} {groups.length === 1 ? "region" : "regions"}</p>
-        </div>
-        <span className="ornament-geo-scope">{isGlobe ? "Global selection" : "Regional selection"}</span>
-      </div>
-
       <div className="ornament-geo-layout">
         <div className="ornament-geo-atlas">
           <div className="ornament-geo-canvas">
@@ -182,7 +173,7 @@ function GeographyPanel({
               onPointerMove={(event) => {
                 const start = drag.current;
                 if (!start) return;
-                const scale = WIDTH / event.currentTarget.getBoundingClientRect().width;
+                const scale = 1 / (event.currentTarget.getScreenCTM()?.a ?? 1);
                 const dx = (event.clientX - start.x) * scale;
                 const dy = (event.clientY - start.y) * scale;
                 if (Math.abs(dx) + Math.abs(dy) > 4) start.moved = true;
@@ -192,10 +183,9 @@ function GeographyPanel({
               onPointerUp={(event) => {
                 suppressClick.current = Boolean(drag.current?.moved);
                 if (drag.current && !drag.current.moved) {
-                  const point = projection.invert?.([
-                    (event.clientX - event.currentTarget.getBoundingClientRect().left) * WIDTH / event.currentTarget.getBoundingClientRect().width,
-                    (event.clientY - event.currentTarget.getBoundingClientRect().top) * HEIGHT / event.currentTarget.getBoundingClientRect().height,
-                  ]);
+                  const matrix = event.currentTarget.getScreenCTM();
+                  const local = matrix && new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+                  const point = local && projection.invert?.([local.x, local.y]);
                   // Country selection is also available from the accessible region list.
                   if (point) {
                     const nearest = groups.find((group) => geoDistance(point, group.region.coordinates) < 0.08);
@@ -267,7 +257,7 @@ function GeographyPanel({
           </div>
         </div>
 
-        <aside className="ornament-geo-sidebar" aria-label="Specimens by origin">
+        <aside className="ornament-geo-sidebar" aria-label="Specimens by origin" data-testid="geography-sidebar">
           <div className="ornament-geo-region-list" role="group" aria-label="Select origin region">
             <button type="button" aria-pressed={selectedCode === null} onClick={() => { setSelectedCode(null); setActiveId(null); }}>
               <span>All regions</span><span>{figures.length}</span>
@@ -284,41 +274,34 @@ function GeographyPanel({
             )}
           </div>
 
-          {active ? (
-            <div className="ornament-geo-preview" aria-live="polite">
-              <Link href={sourceHref(active.figure.source.id)} className="ornament-geo-image-link" aria-label={`Open ${active.figure.source.title}`}>
-                {active.figure.source.imageUrl ? <OrnamentImage src={active.figure.source.imageUrl} alt={active.figure.source.title} fill sizes="(max-width: 700px) 70vw, 300px" className="object-contain" /> : <span className="ornament-geo-no-image">Image unavailable</span>}
-              </Link>
-              <div className="ornament-geo-specimen-meta">
-                <p className="ornament-geo-kicker">{active.figure.figLabel} · {active.figure.source.year}</p>
-                <h3><Link href={sourceHref(active.figure.source.id)}>{active.figure.titleLabel}</Link></h3>
-                <p>{active.figure.source.creator}</p>
-                <p className="ornament-geo-origin-label">{active.region?.name ?? "Origin not yet recorded"}{active.attribution && <span className="ornament-geo-basis">{active.attribution.basis}</span>}</p>
-                <p className="ornament-geo-attribution">{active.attribution?.note ?? "No supported regional attribution is available. This specimen has not been assigned a location."}</p>
-                {active.attribution?.evidenceUrl && <a className="ornament-geo-evidence" href={active.attribution.evidenceUrl} target="_blank" rel="noreferrer">Museum record ↗</a>}
-                {isAdmin && <ArchiveSourceButton sourceId={active.figure.source.id} archived={active.figure.source.notionStatus === "Archived"} onCompleted={(archived) => onArchiveChange(active.figure.source.id, archived)} />}
-              </div>
-            </div>
-          ) : <p className="ornament-geo-no-results">No specimens in this selection.</p>}
+          <div className="ornament-geo-specimens" role="group" aria-label={`${displayCountry} specimens`} aria-describedby={`${id}-attribution`}>
+            {shownItems.map(({ figure, region, attribution }) => (
+              <article key={figure.source.id} className="ornament-geo-specimen">
+                <Link
+                  href={sourceHref(figure.source.id)}
+                  className="ornament-geo-specimen-link"
+                  data-testid={`open-specimen-${figure.source.id}`}
+                  aria-label={`Open ${figure.source.title}`}
+                  title={attribution?.note ?? "No supported regional attribution is available."}
+                  onMouseEnter={() => setActiveId(figure.source.id)}
+                  onMouseLeave={() => setActiveId(null)}
+                  onFocus={() => setActiveId(figure.source.id)}
+                  onBlur={() => setActiveId(null)}
+                >
+                  <span className="ornament-geo-thumb">
+                    {figure.source.imageUrl ? <OrnamentImage src={figure.source.imageUrl} alt="" fill sizes="(max-width: 700px) 40vw, 17vw" className="object-contain" /> : <span className="ornament-geo-no-image">Image unavailable</span>}
+                  </span>
+                  <span className="ornament-geo-item-title">{figure.titleLabel}</span>
+                  <span className="ornament-geo-item-region">{region?.name ?? "Unplaced"} · {figure.source.year}</span>
+                </Link>
+                {isAdmin && <div className="ornament-geo-archive"><ArchiveSourceButton sourceId={figure.source.id} archived={figure.source.notionStatus === "Archived"} onCompleted={(archived) => onArchiveChange(figure.source.id, archived)} /></div>}
+              </article>
+            ))}
+          </div>
+          {!shownItems.length && <p className="ornament-geo-no-results">No specimens in this selection.</p>}
         </aside>
       </div>
-
-      <div className="ornament-geo-specimens-head">
-        <h3>{displayCountry}</h3>
-        <span>{shownItems.length} {shownItems.length === 1 ? "specimen" : "specimens"}</span>
-      </div>
-      <div className="ornament-geo-specimens" role="group" aria-label={`${displayCountry} specimens`}>
-        {shownItems.map(({ figure, region }) => (
-          <button type="button" key={figure.source.id} aria-pressed={figure.source.id === active?.figure.source.id} data-testid={`select-specimen-${figure.source.id}`} onClick={() => {
-            setActiveId(figure.source.id);
-            if (isGlobe && region) setRotation([-region.coordinates[0], -region.coordinates[1]]);
-          }}>
-            <span className="ornament-geo-thumb">{figure.source.imageUrl && <OrnamentImage src={figure.source.imageUrl} alt="" fill sizes="48px" className="object-contain" />}</span>
-            <span><span className="ornament-geo-item-title">{figure.titleLabel}</span><span className="ornament-geo-item-region">{region?.name ?? "Unplaced"} · {figure.source.year}</span></span>
-          </button>
-        ))}
-      </div>
-      <p className="ornament-geo-disclaimer">Locations show regional attributions, including an artist’s documented nationality where the place of creation is unknown, not the museums holding the works. Markers are representative country positions; modern borders are for orientation only.</p>
+      <p className="ornament-geo-disclaimer" id={`${id}-attribution`}>Locations show regional or artist-nationality attributions, not confirmed creation sites. Hover a specimen for its attribution note; modern borders are for orientation only.</p>
     </section>
   );
 }
