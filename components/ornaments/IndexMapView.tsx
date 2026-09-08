@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import maplibregl from "maplibre-gl";
+import { Map as MapLibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import { OrnamentImage } from "@/components/ornaments/OrnamentImage";
@@ -56,7 +56,7 @@ function haversineRad(
 }
 
 function applyCamera(
-  map: maplibregl.Map,
+  map: MapLibreMap,
   isGlobe: boolean,
   origins: OrnamentOrigin[],
   reduceMotion: boolean,
@@ -87,7 +87,7 @@ function applyCamera(
 }
 
 function projectPins(
-  map: maplibregl.Map,
+  map: MapLibreMap,
   located: LocatedFigure[],
 ): ProjectedPin[] {
   const center = map.getCenter();
@@ -131,7 +131,7 @@ export function IndexMapView({
   reduceMotion = false,
 }: IndexMapViewProps) {
   const mapNodeRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
+  const mapRef = useRef<MapLibreMap | null>(null);
   const viewRef = useRef({
     isGlobe: globalSelection,
     origins: [] as OrnamentOrigin[],
@@ -168,7 +168,7 @@ export function IndexMapView({
     const node = mapNodeRef.current;
     if (!node) return;
 
-    const map = new maplibregl.Map({
+    const map = new MapLibreMap({
       container: node,
       style: catalogMapStyle(),
       center: [12, 42],
