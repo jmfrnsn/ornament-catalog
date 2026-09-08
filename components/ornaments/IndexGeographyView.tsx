@@ -11,6 +11,7 @@ import world from "world-atlas/countries-110m.json";
 import type { OrnamentFigure } from "@/lib/ornaments/figure-catalog";
 import { geographicDisplayMode, groupFigureOrigins, type OriginGroup } from "@/lib/ornaments/geography";
 import { createGeographyLabelLayout, geographyLabelConnector, projectGeographyLabels } from "@/lib/ornaments/geography-labels";
+import { rotateGeographyByPixels } from "@/lib/ornaments/geography-camera";
 import "./geography.css";
 
 const topology = world as unknown as Topology<{ countries: GeometryCollection<{ name: string }> }>;
@@ -65,7 +66,7 @@ function GeographyPanel({
   const [pan, setPan] = useState<[number, number]>([0, 0]);
   const cameraAnimation = useRef<{ stop: () => void } | null>(null);
   useEffect(() => () => cameraAnimation.current?.stop(), []);
-  const drag = useRef<{ x: number; y: number; rotation: [number, number]; pan: [number, number]; moved: boolean } | null>(null);
+  const drag = useRef<{ x: number; y: number; rotation: [number, number]; pan: [number, number]; radius: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -172,8 +173,8 @@ function GeographyPanel({
 
   function moveView(x: number, y: number) {
     cameraAnimation.current?.stop();
-    if (isGlobe) setRotation(([lon, lat]) => [lon + x, clamp(lat + y, -80, 80)]);
-    else setPan(([px, py]) => [clamp(px + x * 5, -WIDTH * zoom, WIDTH * zoom), clamp(py + y * 5, -HEIGHT * zoom, HEIGHT * zoom)]);
+    if (isGlobe) setRotation(value => rotateGeographyByPixels(value, x, y, projection.scale()));
+    else setPan(([px, py]) => [clamp(px + x, -WIDTH * zoom, WIDTH * zoom), clamp(py + y, -HEIGHT * zoom, HEIGHT * zoom)]);
   }
 
   return (
@@ -192,7 +193,7 @@ function GeographyPanel({
               onKeyDown={(event) => {
                 // A focused marker handles its own activation keys.
                 if (event.target !== event.currentTarget) return;
-                const moves: Record<string, [number, number]> = { ArrowLeft: [-10, 0], ArrowRight: [10, 0], ArrowUp: [0, -10], ArrowDown: [0, 10] };
+                const moves: Record<string, [number, number]> = { ArrowLeft: [-40, 0], ArrowRight: [40, 0], ArrowUp: [0, -40], ArrowDown: [0, 40] };
                 if (moves[event.key]) { event.preventDefault(); moveView(...moves[event.key]); }
                 if (event.key === "+" || event.key === "=") { event.preventDefault(); changeZoom(.25); }
                 if (event.key === "-") { event.preventDefault(); changeZoom(-.25); }
@@ -203,7 +204,7 @@ function GeographyPanel({
                 cameraAnimation.current?.stop();
                 event.currentTarget.setPointerCapture(event.pointerId);
                 suppressClick.current = false;
-                drag.current = { x: event.clientX, y: event.clientY, rotation, pan, moved: false };
+                drag.current = { x: event.clientX, y: event.clientY, rotation, pan, radius: projection.scale(), moved: false };
               }}
               onPointerMove={(event) => {
                 const start = drag.current;
@@ -212,7 +213,7 @@ function GeographyPanel({
                 const dx = (event.clientX - start.x) * scale;
                 const dy = (event.clientY - start.y) * scale;
                 if (Math.abs(dx) + Math.abs(dy) > 4) start.moved = true;
-                if (isGlobe) setRotation([start.rotation[0] + dx / 4, clamp(start.rotation[1] - dy / 4, -80, 80)]);
+                if (isGlobe) setRotation(rotateGeographyByPixels(start.rotation, dx, dy, start.radius));
                 else setPan([clamp(start.pan[0] + dx, -WIDTH * zoom, WIDTH * zoom), clamp(start.pan[1] + dy, -HEIGHT * zoom, HEIGHT * zoom)]);
               }}
               onPointerUp={(event) => {

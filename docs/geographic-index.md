@@ -22,6 +22,7 @@ The reviewed active set has no museum-confirmed places of creation. The geograph
 - The map starts immediately beneath the existing List / Grid / Globe controls, without a separate Geographic Index row.
 - The geography fills the full catalog width. There is no right panel, region-selection grid, bottom specimen grid or replacement drawer. Browse and open specimens through the existing List and Grid views.
 - Drag the globe to rotate or a regional map to pan; use the zoom buttons and Reset.
+- Globe drag sensitivity uses the zoomed projection radius and latitude rather than a fixed degrees-per-pixel rate, keeping zoomed movement close to pointer distance. Arrow keys move approximately 40 screen pixels in either projection instead of taking large angular jumps.
 - Keyboard: Tab to floating labels; Enter or Space selects a region. On the geographic surface itself, arrows move, plus/minus zoom and Home resets.
 - Era or archive changes reset geographic selection and bounds. Admin archive controls remain available in List and Grid.
 - Map geometry is bundled from `world-atlas` / Natural Earth; no API key, map tiles, tracking or runtime map service is needed.
