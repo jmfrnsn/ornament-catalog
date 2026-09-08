@@ -1,0 +1,173 @@
+[
+  {
+    "id": "a1ba93ad-40c9-4514-be96-d2d23d180e2e",
+    "countryCode": "250",
+    "country": "France",
+    "label": "France (regional attribution)",
+    "basis": "artist nationality only",
+    "note": "Met lists artist as \"Anonymous, French, 17th century\"; no place of creation, culture, country, region or city stated. City n.a.",
+    "evidenceUrl": "https://www.metmuseum.org/art/collection/search/676592"
+  },
+  {
+    "id": "0ea86cca-35c1-498c-a997-9c6409703776",
+    "countryCode": "250",
+    "country": "France",
+    "label": "France (regional attribution)",
+    "basis": "artist nationality only",
+    "note": "Met lists \"Anonymous, French, 19th century\"; geography fields empty. City n.a.",
+    "evidenceUrl": "https://www.metmuseum.org/art/collection/search/359625"
+  },
+  {
+    "id": "160f6196-72d1-4bbe-977b-aa890f372f3e",
+    "countryCode": "380",
+    "country": "Italy",
+    "label": "Italy (regional attribution)",
+    "basis": "artist nationality only",
+    "note": "\"Anonymous, Italian, 16th century\", after Cornelis Massys (Netherlandish); no place of creation stated. City n.a.",
+    "evidenceUrl": "https://www.metmuseum.org/art/collection/search/407178"
+  },
+  {
+    "id": "961a9708-9a4b-48a7-ac53-3000d8704b38",
+    "countryCode": "156",
+    "country": "China",
+    "label": "China (regional attribution)",
+    "basis": "artist nationality only",
+    "note": "The Met identifies Lamqua as Chinese. This marks the artist’s nationality; the work’s place of creation is not recorded.",
+    "evidenceUrl": "https://www.metmuseum.org/art/collection/search/428554"
+  },
+  {
+    "id": "d70074a1-ad30-4667-a4bb-78c855897450",
+    "countryCode": "826",
+    "country": "United Kingdom",
+    "label": "United Kingdom (regional attribution)",
+    "basis": "artist nationality only",
+    "note": "Isaac Ware, \"British, before 1704-1766 Hampstead\"; Houghton Hall, Norfolk is the subject site, not a stated place of creation. City n.a.",
+    "evidenceUrl": "https://www.metmuseum.org/art/collection/search/424135"
+  },
+  {
+    "id": "f43745f2-5a89-4129-9358-faebcd73461b",
+    "countryCode": "380",
+    "country": "Italy",
+    "label": "Italy (regional attribution)",
+    "basis": "artist nationality only",
+    "note": "\"Anonymous, Italian, 16th century\", after Cornelis Bos (Netherlandish); no geography fields populated. City n.a.",
+    "evidenceUrl": "https://www.metmuseum.org/art/collection/search/407171"
+  },
+  {
+    "id": "0518c3f5-ab81-41a0-a92b-86300376f80f",
+    "countryCode": "826",
+    "country": "United Kingdom",
+    "label": "United Kingdom (regional attribution)",
+    "basis": "artist nationality only",
+    "note": "\"Anonymous, British, 18th century\"; no place of creation stated (page verified via Met public object record).",
+    "evidenceUrl": "https://www.metmuseum.org/art/collection/search/362364"
+  },
+  {
+    "id": "2eb237cd-bc08-40c1-8819-a1a8138f0391",
+    "countryCode": "826",
+    "country": "United Kingdom",
+    "label": "United Kingdom (regional attribution)",
+    "basis": "artist nationality only",
+    "note": "Robert Adam, \"British, Scottish, Kirkcaldy, Scotland 1728-1792 London\"; Harewood House, Yorkshire is the project site, not a stated creation place. City n.a.",
+    "evidenceUrl": "https://www.metmuseum.org/art/collection/search/365741"
+  },
+  {
+    "id": "6ccbcfe1-3af9-43f1-88de-c49b0ccc2075",
+    "countryCode": "203",
+    "country": "Czechia",
+    "label": "Czechia (cultural attribution)",
+    "basis": "cultural attribution",
+    "note": "The museum records “Czechoslovakia, 20th century” and identifies Mucha as Czech. Czechia is a modern cultural reference, not a confirmed creation site.",
+    "evidenceUrl": "https://www.clevelandart.org/art/1992.35"
+  },
+  {
+    "id": "3bda1c81-8c77-4af6-82b2-c6ecc93e8c91",
+    "countryCode": "276",
+    "country": "Germany",
+    "label": "Germany (regional attribution)",
+    "basis": "artist nationality only",
+    "note": "Art Institute of Chicago lists \"Germany\" explicitly labelled \"Artist's nationality\" for Hans Sebald Beham; no place of creation field. City n.a.",
+    "evidenceUrl": "https://www.artic.edu/artworks/95548"
+  },
+  {
+    "id": "fdc3716c-7e63-4131-b9a1-20feb9e6430f",
+    "countryCode": "380",
+    "country": "Italy",
+    "label": "Italy (regional attribution)",
+    "basis": "artist nationality only",
+    "note": "\"Anonymous, Italian, 16th century\", after Cornelis Bos (Netherlandish); no geography stated. City n.a.",
+    "evidenceUrl": "https://www.metmuseum.org/art/collection/search/407170"
+  },
+  {
+    "id": "84b451a9-5801-441f-94e9-3794e58f80d7",
+    "countryCode": "380",
+    "country": "Italy",
+    "label": "Italy (regional attribution)",
+    "basis": "artist nationality only",
+    "note": "\"Anonymous, Italian, 19th century\", dated 1800-1900; no place of creation stated. City n.a.",
+    "evidenceUrl": "https://www.metmuseum.org/art/collection/search/390416"
+  },
+  {
+    "id": "9265801a-ce94-4f24-9f35-1c8968c63574",
+    "countryCode": "380",
+    "country": "Italy",
+    "label": "Italy (regional attribution)",
+    "basis": "artist nationality only",
+    "note": "Moncalvo (Guglielmo Caccia), \"Italian, Montabone 1568-1625 Moncalvo\"; Montabone/Moncalvo are birth/death places, not stated creation place. City n.a.",
+    "evidenceUrl": "https://www.metmuseum.org/art/collection/search/340810"
+  },
+  {
+    "id": "ba597176-18c2-423c-96fd-6cc5e8a5b8b9",
+    "countryCode": "276",
+    "country": "Germany",
+    "label": "Germany (cultural attribution)",
+    "basis": "cultural attribution",
+    "note": "Met records culture \"German\"; artist \"Lorenz Lechler (German, born ca. 1460-ca. 1538)\" with an alternative \"Unidentified Central European artist\" attribution, so the region is approximate (Central Europe). City n.a.",
+    "evidenceUrl": "https://www.metmuseum.org/art/collection/search/860992"
+  },
+  {
+    "id": "f8a73dae-f0f2-4c18-976c-440bc01e3974",
+    "countryCode": "380",
+    "country": "Italy",
+    "label": "Italy (regional attribution)",
+    "basis": "artist nationality only",
+    "note": "Donato Giuseppe Frisoni, \"Italian, Laino, near Como 1683-1735 Ludwigsburg\". The design's subject is the Favorita pavilion at Ludwigsburg, Germany, and Frisoni died there, but the Met states no place of creation; a German creation place is plausible but unconfirmed. City n.a.",
+    "evidenceUrl": "https://www.metmuseum.org/art/collection/search/343233"
+  },
+  {
+    "id": "9ba7ef15-f943-492a-a3db-22d984a10da4",
+    "countryCode": "380",
+    "country": "Italy",
+    "label": "Italy (regional attribution)",
+    "basis": "artist nationality only",
+    "note": "Giovanni Andrea Maglioli, \"Italian, active 1580-1610\". The object page also shows anonymous German/Italian and formerly Netherlandish attributions, so nationality is contested; no place of creation stated. City n.a.",
+    "evidenceUrl": "https://www.metmuseum.org/art/collection/search/383303"
+  },
+  {
+    "id": "b7e2a404-052b-4354-944e-08cd39be7df9",
+    "countryCode": "380",
+    "country": "Italy",
+    "label": "Italy (regional attribution)",
+    "basis": "artist nationality only",
+    "note": "Luzio Luzzi, \"Italian, active Rome, documented 1519-1582\", ca. 1543-45. \"Active Rome\" describes career activity, not a stated place of creation, so city is left n.a.",
+    "evidenceUrl": "https://www.metmuseum.org/art/collection/search/459496"
+  },
+  {
+    "id": "6210dcca-254b-42f4-92b0-163cab5ce48f",
+    "countryCode": "250",
+    "country": "France",
+    "label": "France (regional attribution)",
+    "basis": "artist nationality only",
+    "note": "Art Institute of Chicago lists \"France\" explicitly labelled \"Artist's nationality\" for Edouard Manet; no place of creation field. City n.a.",
+    "evidenceUrl": "https://www.artic.edu/artworks/9485"
+  },
+  {
+    "id": "f932af79-f62c-4ff8-8c4b-d3183ebf6ef0",
+    "countryCode": "380",
+    "country": "Italy",
+    "label": "Italy (regional attribution)",
+    "basis": "artist nationality only",
+    "note": "Giuseppe Bernardino Bison, \"Italian, Palmanova 1762-1844 Milan\"; birth/death cities only, no stated creation place. City n.a.",
+    "evidenceUrl": "https://www.metmuseum.org/art/collection/search/342113"
+  }
+]
