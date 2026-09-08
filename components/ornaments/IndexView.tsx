@@ -341,9 +341,6 @@ export function IndexView({
             >
               <IndexGeographyView
                 figures={visibleFigures}
-                isAdmin={isAdmin}
-                onArchiveChange={onArchiveChange}
-                embed={embed}
               />
             </motion.div>
           ) : (

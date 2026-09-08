@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { animate, AnimatePresence, motion, useInView, useReducedMotion } from "motion/react";
 import { geoDistance, geoGraticule10, geoMercator, geoOrthographic, geoPath } from "d3-geo";
@@ -9,11 +8,9 @@ import type { GeometryCollection, Topology } from "topojson-specification";
 import type { Feature, Geometry } from "geojson";
 import world from "world-atlas/countries-110m.json";
 
-import { ArchiveSourceButton } from "./ArchiveSourceButton";
-import { OrnamentImage } from "./OrnamentImage";
 import type { OrnamentFigure } from "@/lib/ornaments/figure-catalog";
 import { geographicDisplayMode, groupFigureOrigins, type OriginGroup } from "@/lib/ornaments/geography";
-import { geographyLabelConnector, placeGeographyLabels } from "@/lib/ornaments/geography-labels";
+import { createGeographyLabelLayout, geographyLabelConnector, projectGeographyLabels } from "@/lib/ornaments/geography-labels";
 import "./geography.css";
 
 const topology = world as unknown as Topology<{ countries: GeometryCollection<{ name: string }> }>;
@@ -25,9 +22,6 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 
 type Props = {
   figures: OrnamentFigure[];
-  isAdmin: boolean;
-  onArchiveChange: (sourceId: string, archived: boolean) => void;
-  embed?: boolean;
 };
 
 function mainPolygon(country: Feature<Geometry>) {
@@ -57,7 +51,7 @@ export function IndexGeographyView(props: Props) {
 }
 
 function GeographyPanel({
-  figures, groups, unplaced, mode, isAdmin, onArchiveChange, embed = false,
+  groups, mode,
 }: Props & ReturnType<typeof groupFigureOrigins> & { mode: "globe" | "map" }) {
   const id = useId();
   const [{ width: WIDTH, height: HEIGHT }, setSize] = useState({ width: 840, height: 580 });
@@ -66,7 +60,6 @@ function GeographyPanel({
   const canvasRef = useRef<HTMLDivElement>(null);
   const inView = useInView(canvasRef, { amount: .15 });
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [rotation, setRotation] = useState<[number, number]>(BASE_ROTATION);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState<[number, number]>([0, 0]);
@@ -86,14 +79,20 @@ function GeographyPanel({
     return () => observer.disconnect();
   }, []);
   const isGlobe = mode === "globe";
-  const selectedGroup = groups.find((group) => group.region.code === selectedCode);
-  const shownItems = selectedCode === "unplaced"
-    ? unplaced
-    : selectedGroup?.items ?? groups.flatMap((group) => group.items).concat(unplaced);
-  const active = shownItems.find((item) => item.figure.source.id === activeId);
-  const activeCode = active?.region?.code ?? selectedGroup?.region.code;
-  const displayCountry = selectedCode === "unplaced" ? "Unplaced" : selectedGroup?.region.name ?? "All regions";
-  const sourceHref = (sourceId: string) => `/sources/${sourceId}${embed ? "?embed=1" : ""}`;
+  const activeCode = selectedCode;
+
+  // These offsets only change with the collection, projection type or viewport.
+  // Using the moving projection here causes discrete candidate/sort changes on every drag frame.
+  const labelLayout = useMemo(() => {
+    const overview = isGlobe
+      ? geoOrthographic().rotate(BASE_ROTATION).translate([WIDTH / 2, HEIGHT / 2]).scale(Math.min(WIDTH, HEIGHT) * .43)
+      : regionalProjection(groups, WIDTH, HEIGHT);
+    const referencePins = groups.flatMap(group => {
+      const point = overview(group.region.coordinates);
+      return point ? [{ code: group.region.code, name: group.region.name, x: point[0], y: point[1] }] : [];
+    });
+    return createGeographyLabelLayout(referencePins, WIDTH, HEIGHT);
+  }, [groups, isGlobe, WIDTH, HEIGHT]);
 
   const projection = useMemo(() => {
     if (isGlobe) {
@@ -120,10 +119,11 @@ function GeographyPanel({
     const coordinates = group.region.coordinates;
     if (isGlobe && geoDistance(coordinates, [-rotation[0], -rotation[1]]) > Math.PI / 2 - 0.02) return [];
     const point = projection(coordinates);
-    if (!point || point[0] < 0 || point[0] > WIDTH || point[1] < 0 || point[1] > HEIGHT) return [];
+    if (!point || !Number.isFinite(point[0] + point[1])) return [];
     return [{ code: group.region.code, name: group.region.name, x: point[0], y: point[1] }];
   });
-  const markers = placeGeographyLabels(pins, WIDTH, HEIGHT);
+  const markers = projectGeographyLabels(pins, labelLayout).filter(label =>
+    label.left + label.width > 0 && label.left < WIDTH && label.top + label.height > 0 && label.top < HEIGHT);
   const reveal = { opacity: reduceMotion || inView ? 1 : 0, scale: reduceMotion || inView ? 1 : .86 };
 
   function moveCamera(targetRotation: [number, number], targetZoom: number, targetPan: [number, number]) {
@@ -140,7 +140,6 @@ function GeographyPanel({
 
   function chooseRegion(group: OriginGroup) {
     setSelectedCode(group.region.code);
-    setActiveId(group.items[0]?.figure.source.id ?? null);
     const targetRotation: [number, number] = [-group.region.coordinates[0], -group.region.coordinates[1]];
     const base = isGlobe
       ? geoOrthographic().rotate(targetRotation).translate([WIDTH / 2, HEIGHT / 2]).scale(Math.min(WIDTH, HEIGHT) * .43)
@@ -162,7 +161,6 @@ function GeographyPanel({
   function resetView() {
     moveCamera(BASE_ROTATION, 1, [0, 0]);
     setSelectedCode(null);
-    setActiveId(null);
   }
 
   function changeZoom(delta: number) {
@@ -223,7 +221,7 @@ function GeographyPanel({
                   const matrix = event.currentTarget.getScreenCTM();
                   const local = matrix && new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
                   const point = local && projection.invert?.([local.x, local.y]);
-                  // Country selection is also available from the accessible region list.
+                  // Floating labels provide keyboard-accessible country selection.
                   if (point) {
                     const nearest = groups.find((group) => geoDistance(point, group.region.coordinates) < 0.08);
                     if (nearest) chooseRegion(nearest);
@@ -259,7 +257,7 @@ function GeographyPanel({
                   const line = geographyLabelConnector(marker);
                   return <g key={marker.code} className={`ornament-geo-pin${marker.code === activeCode ? " is-active" : ""}`} aria-hidden="true">
                     {line && <path data-testid={`map-connector-${marker.code}`} d={`M${line.x1},${line.y1} L${line.x2},${line.y2}`} />}
-                    <circle cx={marker.x} cy={marker.y} r={3} />
+                    <circle data-testid={`map-pin-${marker.code}`} cx={marker.x} cy={marker.y} r={3} />
                   </g>;
                 })}
               </g>
@@ -292,7 +290,7 @@ function GeographyPanel({
                 })}
               </AnimatePresence>
             </div>
-            {!groups.length && <p className="ornament-geo-empty">No verified regions in this selection.<br />Explore the unplaced specimens alongside.</p>}
+            {!groups.length && <p className="ornament-geo-empty">No verified regions in this selection.</p>}
             <motion.div className="ornament-geo-controls" role="group" aria-label="Geographic view controls"
               initial={reduceMotion ? false : { opacity: 0, scale: .94 }}
               animate={reveal}
@@ -306,49 +304,6 @@ function GeographyPanel({
           </div>
         </div>
 
-        <aside className="ornament-geo-sidebar" aria-label="Specimens by origin" data-testid="geography-sidebar">
-          <div className="ornament-geo-region-list" role="group" aria-label="Select origin region">
-            <button type="button" aria-pressed={selectedCode === null} onClick={resetView}>
-              <span>All regions</span><span>{figures.length}</span>
-            </button>
-            {groups.map((group) => (
-              <button key={group.region.code} type="button" aria-pressed={selectedCode === group.region.code} data-testid={`select-region-${group.region.code}`} onClick={() => chooseRegion(group)}>
-                <span>{group.region.name}</span><span>{group.items.length}</span>
-              </button>
-            ))}
-            {unplaced.length > 0 && (
-              <button type="button" aria-pressed={selectedCode === "unplaced"} onClick={() => { setSelectedCode("unplaced"); setActiveId(null); }}>
-                <span>Unplaced</span><span>{unplaced.length}</span>
-              </button>
-            )}
-          </div>
-
-          <div className="ornament-geo-specimens" role="group" aria-label={`${displayCountry} specimens`}>
-            {shownItems.map(({ figure, region, attribution }) => (
-              <article key={figure.source.id} className="ornament-geo-specimen">
-                <Link
-                  href={sourceHref(figure.source.id)}
-                  className="ornament-geo-specimen-link"
-                  data-testid={`open-specimen-${figure.source.id}`}
-                  aria-label={`Open ${figure.source.title}`}
-                  title={attribution?.note ?? "No supported regional attribution is available."}
-                  onMouseEnter={() => setActiveId(figure.source.id)}
-                  onMouseLeave={() => setActiveId(null)}
-                  onFocus={() => setActiveId(figure.source.id)}
-                  onBlur={() => setActiveId(null)}
-                >
-                  <span className="ornament-geo-thumb">
-                    {figure.source.imageUrl ? <OrnamentImage src={figure.source.imageUrl} alt="" fill sizes="(max-width: 700px) 40vw, 17vw" className="object-contain" /> : <span className="ornament-geo-no-image">Image unavailable</span>}
-                  </span>
-                  <span className="ornament-geo-item-title">{figure.titleLabel}</span>
-                  <span className="ornament-geo-item-region">{region?.name ?? "Unplaced"} · {figure.source.year}</span>
-                </Link>
-                {isAdmin && <div className="ornament-geo-archive"><ArchiveSourceButton sourceId={figure.source.id} archived={figure.source.notionStatus === "Archived"} onCompleted={(archived) => onArchiveChange(figure.source.id, archived)} /></div>}
-              </article>
-            ))}
-          </div>
-          {!shownItems.length && <p className="ornament-geo-no-results">No specimens in this selection.</p>}
-        </aside>
       </div>
     </section>
   );

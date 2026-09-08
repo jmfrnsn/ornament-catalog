@@ -1,6 +1,22 @@
 export type GeographyPin = { code: string; name: string; x: number; y: number };
 export type GeographyLabel = GeographyPin & { left: number; top: number; width: number; height: number };
 export type GeographyConnector = { x1: number; y1: number; x2: number; y2: number };
+export type GeographyLabelOffset = { dx: number; dy: number; width: number; height: number };
+
+/** Plan once against the overview, not against the moving camera. */
+export function createGeographyLabelLayout(pins: GeographyPin[], width: number, height: number) {
+  return new Map(placeGeographyLabels(pins, width, height).map(label => [
+    label.code, { dx: label.left - label.x, dy: label.top - label.y, width: label.width, height: label.height },
+  ]));
+}
+
+/** Translate each label with its pin. Never re-sort, clamp or repack during navigation. */
+export function projectGeographyLabels(pins: GeographyPin[], layout: ReadonlyMap<string, GeographyLabelOffset>): GeographyLabel[] {
+  return pins.flatMap(pin => {
+    const offset = layout.get(pin.code);
+    return offset ? [{ ...pin, left: pin.x + offset.dx, top: pin.y + offset.dy, width: offset.width, height: offset.height }] : [];
+  });
+}
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const overlap = (a: GeographyLabel, b: GeographyLabel, gap = 8) =>
