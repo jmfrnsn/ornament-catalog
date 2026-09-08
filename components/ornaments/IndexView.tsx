@@ -6,6 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { ArchiveSourceButton } from "@/components/ornaments/ArchiveSourceButton";
 import { IndexListView } from "@/components/ornaments/IndexListView";
+import { IndexMapView } from "@/components/ornaments/IndexMapView";
 import { OrnamentImage } from "@/components/ornaments/OrnamentImage";
 import type { OrnamentFigure } from "@/lib/ornaments/figure-catalog";
 
@@ -17,12 +18,12 @@ type IndexViewProps = {
   embed?: boolean;
 };
 
-type IndexDisplayMode = "grid" | "list";
+type IndexDisplayMode = "grid" | "list" | "map";
 
 const INDEX_DISPLAY_STORAGE_KEY = "ornament-index-display";
 
 function isIndexDisplayMode(value: unknown): value is IndexDisplayMode {
-  return value === "grid" || value === "list";
+  return value === "grid" || value === "list" || value === "map";
 }
 
 function shortEra(era: string) {
@@ -262,7 +263,7 @@ export function IndexView({
         <div className="ornament-index-head-cell hidden lg:block" aria-hidden />
 
         <div
-          className="ornament-index-head-cell flex justify-start gap-x-0 max-lg:col-start-2 lg:justify-end"
+          className="ornament-index-head-cell flex flex-wrap justify-start gap-x-0 max-lg:col-start-2 lg:justify-end"
           role="group"
           aria-label="Index display"
         >
@@ -270,6 +271,7 @@ export function IndexView({
             [
               { id: "list", label: "List" },
               { id: "grid", label: "Grid" },
+              { id: "map", label: "Cursor Map" },
             ] as const
           ).map((option, index) => {
             const selected = display === option.id;
@@ -317,6 +319,30 @@ export function IndexView({
                 onArchiveChange={onArchiveChange}
                 reduceMotion={reduceMotion}
                 embed={embed}
+              />
+            </motion.div>
+          ) : display === "map" ? (
+            <motion.div
+              key="map"
+              initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={
+                reduceMotion
+                  ? undefined
+                  : {
+                      opacity: 0,
+                      y: -4,
+                      pointerEvents: "none",
+                      transition: paneExitTransition,
+                    }
+              }
+              transition={paneTransition}
+            >
+              <IndexMapView
+                figures={visibleFigures}
+                globalSelection={eraFilter === null}
+                embed={embed}
+                reduceMotion={reduceMotion}
               />
             </motion.div>
           ) : (
