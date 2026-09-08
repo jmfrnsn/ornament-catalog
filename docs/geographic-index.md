@@ -6,13 +6,17 @@ The index offers List, Grid and a geographic view. Its label and projection adap
 
 `data/ornaments/origins.json` holds reviewed attributions keyed by stable source ID. It is separate from the Notion-generated export so routine syncs do not overwrite it. Each record includes a country code, basis, explanatory note and a museum evidence URL.
 
-The reviewed active set has no museum-confirmed places of creation. The geography represents cultural or artist-nationality attributions, described in the map note and each specimen link's tooltip. It must not be presented as precise production locations. Modern country positions and borders are orientation aids only.
+The reviewed active set has no museum-confirmed places of creation. The geography represents cultural or artist-nationality attributions, described in each specimen link's tooltip. The visible disclaimer row has been removed. It must not be presented as precise production locations. Modern country positions and borders are orientation aids only.
 
 `lib/ornaments/geography.ts` resolves reviewed records first, then recognized explicit catalog-region aliases. It deliberately does not infer a location from a holding museum, an artist name, a title or a depicted/project site. Unknown or ambiguous future records appear under Unplaced rather than disappearing or receiving invented coordinates. To add another country, extend the region registry and its representative coordinate, then add reviewed source-linked records as needed.
 
 ## Interaction
 
 - Select a region using a country, count marker or region button.
+- Region names are uppercase, and the selection grid has 2px gaps between hover backgrounds.
+- Region/count labels float above the globe and map, with collision avoidance, anchored pins, subtle shadows, and a spring entrance when they rotate or scroll into view. Reduced-motion preferences disable the animation.
+- The SVG viewBox and projection follow the actual canvas width and height, so Mercator maps fill the pane rather than sitting inside a fixed-aspect-ratio box.
+- There is no visible instruction row. Keyboard help stays screen-reader accessible; a small map credit and floating zoom controls remain over the map.
 - The map starts immediately beneath the existing List / Grid / Globe controls, without a separate Geographic Index row.
 - Browse specimens in the scrollable two-column right panel; there is no separate bottom grid or single-specimen preview.
 - Hover or focus a specimen to highlight its country; open it to reach the existing source detail page. Attribution notes remain available in the link tooltips and the source-linked data file.

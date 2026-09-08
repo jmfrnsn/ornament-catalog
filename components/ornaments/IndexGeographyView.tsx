@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion, useInView, useReducedMotion } from "motion/react";
 import { geoDistance, geoGraticule10, geoMercator, geoOrthographic, geoPath } from "d3-geo";
 import { feature } from "topojson-client";
 import type { GeometryCollection, Topology } from "topojson-specification";
@@ -12,6 +13,7 @@ import { ArchiveSourceButton } from "./ArchiveSourceButton";
 import { OrnamentImage } from "./OrnamentImage";
 import type { OrnamentFigure } from "@/lib/ornaments/figure-catalog";
 import { geographicDisplayMode, groupFigureOrigins, type OriginGroup } from "@/lib/ornaments/geography";
+import { placeGeographyLabels } from "@/lib/ornaments/geography-labels";
 import "./geography.css";
 
 const topology = world as unknown as Topology<{ countries: GeometryCollection<{ name: string }> }>;
@@ -47,9 +49,11 @@ function GeographyPanel({
   figures, groups, unplaced, mode, isAdmin, onArchiveChange, embed = false,
 }: Props & ReturnType<typeof groupFigureOrigins> & { mode: "globe" | "map" }) {
   const id = useId();
-  const [compact, setCompact] = useState(false);
-  const WIDTH = compact ? 420 : 840;
-  const HEIGHT = compact ? 420 : 580;
+  const [{ width: WIDTH, height: HEIGHT }, setSize] = useState({ width: 840, height: 580 });
+  const compact = WIDTH < 600;
+  const reduceMotion = useReducedMotion() ?? false;
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const inView = useInView(canvasRef, { amount: .15 });
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [rotation, setRotation] = useState<[number, number]>(BASE_ROTATION);
@@ -57,12 +61,15 @@ function GeographyPanel({
   const [pan, setPan] = useState<[number, number]>([0, 0]);
   const drag = useRef<{ x: number; y: number; rotation: [number, number]; pan: [number, number]; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
-  const svgRef = useRef<SVGSVGElement>(null);
   useEffect(() => {
-    const svg = svgRef.current;
-    if (!svg) return;
-    const observer = new ResizeObserver(([entry]) => setCompact(entry.contentRect.width < 600));
-    observer.observe(svg);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const width = Math.round(entry.contentRect.width);
+      const height = Math.round(entry.contentRect.height);
+      if (width > 0 && height > 0) setSize(previous => previous.width === width && previous.height === height ? previous : { width, height });
+    });
+    observer.observe(canvas);
     return () => observer.disconnect();
   }, []);
   const isGlobe = mode === "globe";
@@ -80,7 +87,7 @@ function GeographyPanel({
       return geoOrthographic()
         .rotate([rotation[0], rotation[1], 0])
         .translate([WIDTH / 2, HEIGHT / 2])
-        .scale((compact ? 164 : 242) * zoom)
+        .scale(Math.min(WIDTH, HEIGHT) * .43 * zoom)
         .clipExtent([[0, 0], [WIDTH, HEIGHT]]);
     }
     const codes = new Set(groups.map((group) => group.region.code));
@@ -88,7 +95,7 @@ function GeographyPanel({
     const map = geoMercator();
     if (regionalCountries.length) {
       map.fitExtent(
-        compact ? [[35, 50], [WIDTH - 70, HEIGHT - 55]] : [[100, 80], [WIDTH - 130, HEIGHT - 80]],
+        [[32, 32], [WIDTH - 32, HEIGHT - 64]],
         { type: "FeatureCollection", features: regionalCountries },
       );
     } else {
@@ -102,22 +109,19 @@ function GeographyPanel({
         (translation[1] - HEIGHT / 2) * zoom + HEIGHT / 2 + pan[1],
       ])
       .clipExtent([[0, 0], [WIDTH, HEIGHT]]);
-  }, [groups, isGlobe, pan, rotation, zoom, compact, WIDTH, HEIGHT]);
+  }, [groups, isGlobe, pan, rotation, zoom, WIDTH, HEIGHT]);
   const path = geoPath(projection);
   const groupByCode = new Map(groups.map((group) => [group.region.code, group]));
 
-  // Count markers have leader lines and separate labels even in dense Europe.
-  const markers = groups.flatMap((group) => {
+  const pins = groups.flatMap((group) => {
     const coordinates = group.region.coordinates;
     if (isGlobe && geoDistance(coordinates, [-rotation[0], -rotation[1]]) > Math.PI / 2 - 0.02) return [];
     const point = projection(coordinates);
-    if (!point || point[0] < 10 || point[0] > WIDTH - 55 || point[1] < 10 || point[1] > HEIGHT - 25) return [];
-    return [{ group, x: point[0], y: point[1], labelY: point[1] }];
-  }).sort((a, b) => a.y - b.y);
-  for (let i = 1; i < markers.length; i++) {
-    const nearby = markers.slice(0, i).filter((marker) => Math.abs(marker.x - markers[i].x) < 85);
-    for (const previous of nearby) markers[i].labelY = Math.max(markers[i].labelY, previous.labelY + 34);
-  }
+    if (!point || point[0] < 0 || point[0] > WIDTH || point[1] < 0 || point[1] > HEIGHT) return [];
+    return [{ code: group.region.code, name: group.region.name, x: point[0], y: point[1] }];
+  });
+  const markers = placeGeographyLabels(pins, WIDTH, HEIGHT);
+  const reveal = { opacity: reduceMotion || inView ? 1 : 0, scale: reduceMotion || inView ? 1 : .86 };
 
   function chooseRegion(group: OriginGroup) {
     setSelectedCode(group.region.code);
@@ -145,9 +149,8 @@ function GeographyPanel({
     <section className="ornament-geography" aria-label="Ornament origins" data-testid="geography-view" data-mode={mode}>
       <div className="ornament-geo-layout">
         <div className="ornament-geo-atlas">
-          <div className="ornament-geo-canvas">
+          <div className="ornament-geo-canvas" ref={canvasRef}>
             <svg
-              ref={svgRef}
               viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
               className="ornament-geo-svg"
               role="group"
@@ -218,42 +221,54 @@ function GeographyPanel({
                     </path>
                   );
                 })}
-                {markers.map(({ group, x, y, labelY }) => (
-                  <g
-                    key={group.region.code}
-                    className={`ornament-geo-marker${group.region.code === activeCode ? " is-active" : ""}`}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`${group.region.name}, ${group.items.length} specimens`}
-                    aria-pressed={selectedCode === group.region.code}
-                    data-testid={`map-marker-${group.region.code}`}
-                    onClick={() => chooseRegion(group)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); chooseRegion(group); }
-                    }}
-                  >
-                    <path d={`M${x},${y} L${x + 25},${labelY} H${x + 42}`} />
-                    <circle cx={x} cy={y} r={3.5} />
-                    <rect x={x + 30} y={labelY - 22} width={44} height={44} fill="transparent" stroke="none" />
-                    <circle className="ornament-geo-count" cx={x + 52} cy={labelY} r={13} />
-                    <text x={x + 52} y={labelY} dy=".35em" textAnchor="middle">{group.items.length}</text>
-                    {!compact && <text className="ornament-geo-place-name" x={x + 74} y={labelY} dy=".35em">{group.region.name}</text>}
-                    <title>{group.region.name}: {group.items.length} specimens</title>
-                  </g>
-                ))}
+                {markers.map(({ code, x, y, left, top, width, height }) => {
+                  const endX = left + width / 2 > x ? left : left + width;
+                  const endY = clamp(y, top + 8, top + height - 8);
+                  return <g key={code} className={`ornament-geo-pin${code === activeCode ? " is-active" : ""}`} aria-hidden="true">
+                    <path d={`M${x},${y} L${endX},${endY}`} />
+                    <circle cx={x} cy={y} r={3} />
+                  </g>;
+                })}
               </g>
             </svg>
+            <div className="ornament-geo-labels" data-testid="floating-region-labels">
+              <AnimatePresence>
+                {markers.map(({ code, left, top, width, height }, index) => {
+                  const group = groupByCode.get(code)!;
+                  return <motion.button
+                    key={code}
+                    type="button"
+                    className={`ornament-geo-label${code === activeCode ? " is-active" : ""}${compact ? " is-compact" : ""}`}
+                    style={{ left, top, width, height }}
+                    aria-label={`${group.region.name}, ${group.items.length} specimens`}
+                    aria-pressed={selectedCode === code}
+                    data-testid={`map-marker-${code}`}
+                    initial={reduceMotion ? false : { opacity: 0, scale: .86 }}
+                    animate={reveal}
+                    exit={{ opacity: 0, scale: reduceMotion ? 1 : .94, transition: { duration: reduceMotion ? 0 : .12 } }}
+                    transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 340, damping: 24, delay: index * .025 }}
+                    whileHover={reduceMotion ? undefined : { scale: 1.025 }}
+                    whileTap={reduceMotion ? undefined : { scale: .97 }}
+                    onClick={() => chooseRegion(group)}
+                  >
+                    <span className="ornament-geo-label-dot" aria-hidden="true" />
+                    <span className="ornament-geo-label-name">{group.region.name}</span>
+                    <span className="ornament-geo-label-count">{group.items.length}</span>
+                  </motion.button>;
+                })}
+              </AnimatePresence>
+            </div>
             {!groups.length && <p className="ornament-geo-empty">No verified regions in this selection.<br />Explore the unplaced specimens alongside.</p>}
-            <div className="ornament-geo-controls" role="group" aria-label="Geographic view controls">
+            <motion.div className="ornament-geo-controls" role="group" aria-label="Geographic view controls"
+              initial={reduceMotion ? false : { opacity: 0, scale: .94 }}
+              animate={reveal}
+              transition={{ duration: reduceMotion ? 0 : .3, ease: [.22, 1, .36, 1] }}>
               <button type="button" aria-label="Zoom in" disabled={zoom >= 2.5} onClick={() => setZoom((value) => clamp(value + 0.25, 0.75, 2.5))}>+</button>
               <button type="button" aria-label="Zoom out" disabled={zoom <= 0.75} onClick={() => setZoom((value) => clamp(value - 0.25, 0.75, 2.5))}>−</button>
               <button type="button" className="ornament-geo-reset" onClick={resetView}>Reset</button>
-            </div>
-            <span className="ornament-geo-projection">{isGlobe ? "Orthographic globe" : "Mercator map"}</span>
-          </div>
-          <div className="ornament-geo-atlas-foot">
-            <p id={`${id}-instructions`}>{isGlobe ? "Drag to rotate" : "Drag to pan"} · Select a region to explore<br />Keyboard: arrows to move, + / − to zoom, Home to reset</p>
-            <a href="https://www.naturalearthdata.com/" target="_blank" rel="noreferrer">Natural Earth</a>
+            </motion.div>
+            <a className="ornament-geo-credit" href="https://www.naturalearthdata.com/" target="_blank" rel="noreferrer">Natural Earth</a>
+            <span className="sr-only" id={`${id}-instructions`}>{isGlobe ? "Drag to rotate" : "Drag to pan"}. Arrow keys move the view, plus and minus zoom, and Home resets.</span>
           </div>
         </div>
 
@@ -274,7 +289,7 @@ function GeographyPanel({
             )}
           </div>
 
-          <div className="ornament-geo-specimens" role="group" aria-label={`${displayCountry} specimens`} aria-describedby={`${id}-attribution`}>
+          <div className="ornament-geo-specimens" role="group" aria-label={`${displayCountry} specimens`}>
             {shownItems.map(({ figure, region, attribution }) => (
               <article key={figure.source.id} className="ornament-geo-specimen">
                 <Link
@@ -301,7 +316,6 @@ function GeographyPanel({
           {!shownItems.length && <p className="ornament-geo-no-results">No specimens in this selection.</p>}
         </aside>
       </div>
-      <p className="ornament-geo-disclaimer" id={`${id}-attribution`}>Locations show regional or artist-nationality attributions, not confirmed creation sites. Hover a specimen for its attribution note; modern borders are for orientation only.</p>
     </section>
   );
 }
