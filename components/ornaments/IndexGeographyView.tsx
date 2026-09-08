@@ -54,7 +54,7 @@ function GeographyPanel({
   groups, mode,
 }: Props & ReturnType<typeof groupFigureOrigins> & { mode: "globe" | "map" }) {
   const id = useId();
-  const [{ width: WIDTH, height: HEIGHT }, setSize] = useState({ width: 840, height: 580 });
+  const [{ width: WIDTH, height: HEIGHT, measured }, setSize] = useState({ width: 840, height: 580, measured: false });
   const compact = WIDTH < 600;
   const reduceMotion = useReducedMotion() ?? false;
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -73,7 +73,7 @@ function GeographyPanel({
     const observer = new ResizeObserver(([entry]) => {
       const width = Math.round(entry.contentRect.width);
       const height = Math.round(entry.contentRect.height);
-      if (width > 0 && height > 0) setSize(previous => previous.width === width && previous.height === height ? previous : { width, height });
+      if (width > 0 && height > 0) setSize(previous => previous.measured && previous.width === width && previous.height === height ? previous : { width, height, measured: true });
     });
     observer.observe(canvas);
     return () => observer.disconnect();
@@ -122,8 +122,8 @@ function GeographyPanel({
     if (!point || !Number.isFinite(point[0] + point[1])) return [];
     return [{ code: group.region.code, name: group.region.name, x: point[0], y: point[1] }];
   });
-  const markers = projectGeographyLabels(pins, labelLayout).filter(label =>
-    label.left + label.width > 0 && label.left < WIDTH && label.top + label.height > 0 && label.top < HEIGHT);
+  const markers = measured ? projectGeographyLabels(pins, labelLayout).filter(label =>
+    label.left + label.width > 0 && label.left < WIDTH && label.top + label.height > 0 && label.top < HEIGHT) : [];
   const reveal = { opacity: reduceMotion || inView ? 1 : 0, scale: reduceMotion || inView ? 1 : .86 };
 
   function moveCamera(targetRotation: [number, number], targetZoom: number, targetPan: [number, number]) {
