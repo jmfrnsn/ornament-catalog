@@ -26,6 +26,12 @@ Open [http://localhost:3003](http://localhost:3003).
 
 See [`docs/notion-ornament-sync.md`](docs/notion-ornament-sync.md) for Notion, webhook, admin, and GitHub Action setup.
 
+Optional Cursor Map tiles:
+
+| Variable | Purpose |
+| --- | --- |
+| `NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN` | Use Mapbox Light vector tiles. Without it, the map uses OpenFreeMap Positron. |
+
 ## Scripts
 
 ```bash

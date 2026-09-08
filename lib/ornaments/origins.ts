@@ -529,3 +529,24 @@ export function originFitGeometry(
     ],
   };
 }
+
+/** Southwest / northeast corners for MapLibre `fitBounds`. */
+export function originFitBounds(
+  origins: Pick<OrnamentOrigin, "lat" | "lng">[],
+): [[number, number], [number, number]] {
+  const { coordinates } = originFitGeometry(origins);
+  const lngs = coordinates.map((point) => point[0]);
+  const lats = coordinates.map((point) => point[1]);
+  return [
+    [Math.min(...lngs), Math.min(...lats)],
+    [Math.max(...lngs), Math.max(...lats)],
+  ];
+}
+
+/** Camera target: inverse of the d3 globe rotation. */
+export function originCameraLngLat(
+  origins: Pick<OrnamentOrigin, "lat" | "lng">[],
+): [number, number] {
+  const [lambda, phi] = originCentroidRotation(origins);
+  return [-lambda, -phi];
+}

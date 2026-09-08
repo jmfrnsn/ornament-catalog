@@ -1,32 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-} from "react";
-import {
-  geoDistance,
-  geoEquirectangular,
-  geoGraticule10,
-  geoOrthographic,
-  geoPath,
-  type GeoPermissibleObjects,
-  type GeoProjection,
-} from "d3-geo";
-import { feature } from "topojson-client";
-import landTopology from "world-atlas/land-110m.json";
+import { useEffect, useMemo, useRef, useState } from "react";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 
 import { OrnamentImage } from "@/components/ornaments/OrnamentImage";
 import type { OrnamentFigure } from "@/lib/ornaments/figure-catalog";
+import { applyCatalogMapPaint, catalogMapStyle } from "@/lib/ornaments/map-style";
 import {
-  originCentroidRotation,
+  originCameraLngLat,
   originClusterKey,
   originFanOffset,
-  originFitGeometry,
+  originFitBounds,
   resolveOrnamentOrigin,
   type OrnamentOrigin,
 } from "@/lib/ornaments/origins";
@@ -48,52 +34,94 @@ type ProjectedPin = LocatedFigure & {
   x: number;
   y: number;
   visible: boolean;
-  clusterIndex: number;
-  clusterCount: number;
 };
-
-const land = feature(landTopology, landTopology.objects.land);
-const graticule = geoGraticule10();
-const SPHERE = { type: "Sphere" } as GeoPermissibleObjects;
 
 function sourceHref(sourceId: string, embed: boolean) {
   return embed ? `/sources/${sourceId}?embed=1` : `/sources/${sourceId}`;
 }
 
-function buildProjection(
-  width: number,
-  height: number,
-  isGlobe: boolean,
-  rotation: [number, number],
-  origins: OrnamentOrigin[],
-): GeoProjection {
-  if (isGlobe) {
-    const radius = Math.max(88, Math.min(width, height) * 0.42);
-    return geoOrthographic()
-      .scale(radius)
-      .translate([width / 2, height / 2 + 4])
-      .rotate([rotation[0], rotation[1], 0])
-      .clipAngle(90)
-      .precision(0.4);
-  }
-
-  const projection = geoEquirectangular().precision(0.4);
-  const subject =
-    origins.length > 0 ? originFitGeometry(origins) : SPHERE;
-  projection.fitExtent(
-    [
-      [48, 40],
-      [width - 48, height - 56],
-    ],
-    subject,
-  );
-  return projection;
+function haversineRad(
+  lng1: number,
+  lat1: number,
+  lng2: number,
+  lat2: number,
+) {
+  const toRad = (degrees: number) => (degrees * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
-function isOnFront(projection: GeoProjection, lng: number, lat: number) {
-  const rotate = projection.rotate();
-  const center: [number, number] = [-rotate[0], -rotate[1]];
-  return geoDistance(center, [lng, lat]) <= Math.PI / 2 - 0.04;
+function applyCamera(
+  map: maplibregl.Map,
+  isGlobe: boolean,
+  origins: OrnamentOrigin[],
+  reduceMotion: boolean,
+) {
+  const duration = reduceMotion ? 0 : 850;
+  const projection = map.getProjection();
+  const nextType = isGlobe ? "globe" : "mercator";
+  if (projection?.type !== nextType) {
+    map.setProjection({ type: nextType });
+  }
+
+  if (origins.length === 0) {
+    map.easeTo({ center: [12, 42], zoom: isGlobe ? 1.85 : 2, duration });
+    return;
+  }
+
+  if (isGlobe) {
+    const center = originCameraLngLat(origins);
+    map.easeTo({ center, zoom: 1.9, duration });
+    return;
+  }
+
+  map.fitBounds(originFitBounds(origins), {
+    padding: { top: 64, bottom: 80, left: 64, right: 64 },
+    maxZoom: 6.4,
+    duration,
+  });
+}
+
+function projectPins(
+  map: maplibregl.Map,
+  located: LocatedFigure[],
+): ProjectedPin[] {
+  const center = map.getCenter();
+  const globe = map.getProjection()?.type === "globe";
+  const clusters = new Map<string, LocatedFigure[]>();
+  for (const entry of located) {
+    const key = originClusterKey(entry.origin);
+    const group = clusters.get(key);
+    if (group) group.push(entry);
+    else clusters.set(key, [entry]);
+  }
+
+  const next: ProjectedPin[] = [];
+  for (const group of clusters.values()) {
+    group.forEach((entry, clusterIndex) => {
+      const point = map.project([entry.origin.lng, entry.origin.lat]);
+      const offset = originFanOffset(clusterIndex, group.length);
+      const visible =
+        !globe ||
+        haversineRad(
+          center.lng,
+          center.lat,
+          entry.origin.lng,
+          entry.origin.lat,
+        ) < 1.42;
+      next.push({
+        ...entry,
+        x: point.x + offset.dx,
+        y: point.y + offset.dy,
+        visible,
+      });
+    });
+  }
+  return next;
 }
 
 export function IndexMapView({
@@ -102,16 +130,17 @@ export function IndexMapView({
   embed = false,
   reduceMotion = false,
 }: IndexMapViewProps) {
-  const stageRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{
-    pointerId: number;
-    x: number;
-    y: number;
-  } | null>(null);
-  const [size, setSize] = useState<{ width: number; height: number } | null>(
-    null,
-  );
-  const [grabbing, setGrabbing] = useState(false);
+  const mapNodeRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const viewRef = useRef({
+    isGlobe: globalSelection,
+    origins: [] as OrnamentOrigin[],
+    reduceMotion,
+  });
+  const locatedRef = useRef<LocatedFigure[]>([]);
+  const [mapReady, setMapReady] = useState(false);
+  const [pins, setPins] = useState<ProjectedPin[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   const located = useMemo<LocatedFigure[]>(() => {
     const next: LocatedFigure[] = [];
@@ -125,103 +154,76 @@ export function IndexMapView({
   const unlocatedCount = figures.length - located.length;
   const isGlobe = globalSelection;
   const selectionKey = `${isGlobe}:${figures.map((figure) => figure.source.id).join(",")}`;
-  const defaultRotation = useMemo(
-    () => originCentroidRotation(located.map((entry) => entry.origin)),
+  const origins = useMemo(
+    () => located.map((entry) => entry.origin),
     [located],
   );
 
   useEffect(() => {
-    const node = stageRef.current;
+    viewRef.current = { isGlobe, origins, reduceMotion };
+    locatedRef.current = located;
+  }, [isGlobe, located, origins, reduceMotion]);
+
+  useEffect(() => {
+    const node = mapNodeRef.current;
     if (!node) return;
 
-    const apply = () => {
-      const rect = node.getBoundingClientRect();
-      const width = Math.max(280, Math.round(rect.width));
-      const height = Math.max(320, Math.round(rect.height));
-      setSize((current) =>
-        current && current.width === width && current.height === height
-          ? current
-          : { width, height },
-      );
+    const map = new maplibregl.Map({
+      container: node,
+      style: catalogMapStyle(),
+      center: [12, 42],
+      zoom: 1.9,
+      minZoom: 1.1,
+      maxZoom: 12,
+      pitch: 0,
+      maxPitch: 0,
+      attributionControl: { compact: true },
+      canvasContextAttributes: { antialias: true },
+    });
+    mapRef.current = map;
+
+    const syncPins = () => {
+      setPins(projectPins(map, locatedRef.current));
     };
 
-    apply();
-    const observer = new ResizeObserver(apply);
+    map.on("style.load", () => {
+      const view = viewRef.current;
+      applyCatalogMapPaint(map);
+      applyCamera(map, view.isGlobe, view.origins, true);
+      setMapReady(true);
+      syncPins();
+    });
+    map.on("move", syncPins);
+
+    const observer = new ResizeObserver(() => map.resize());
     observer.observe(node);
-    return () => observer.disconnect();
+
+    return () => {
+      observer.disconnect();
+      map.remove();
+      mapRef.current = null;
+      setMapReady(false);
+    };
   }, []);
 
-  const [dragRotation, setDragRotation] = useState<[number, number] | null>(
-    null,
-  );
-  const [rotationKey, setRotationKey] = useState(selectionKey);
-  if (rotationKey !== selectionKey) {
-    setRotationKey(selectionKey);
-    setDragRotation(null);
-  }
-  const rotation = dragRotation ?? defaultRotation;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    applyCamera(map, isGlobe, origins, reduceMotion);
+  }, [isGlobe, mapReady, origins, reduceMotion, selectionKey]);
 
-  const [activeId, setActiveId] = useState<string | null>(null);
-
-  const projection = useMemo(
-    () =>
-      size
-        ? buildProjection(
-            size.width,
-            size.height,
-            isGlobe,
-            rotation,
-            located.map((entry) => entry.origin),
-          )
-        : null,
-    [isGlobe, located, rotation, size],
-  );
-
-  const path = useMemo(
-    () => (projection ? geoPath(projection) : null),
-    [projection],
-  );
-  const landPath = path?.(land) ?? "";
-  const graticulePath = path?.(graticule) ?? "";
-  const spherePath = path?.(SPHERE) ?? "";
-  const globeRadius = isGlobe && projection ? projection.scale() : 0;
-  const [tx, ty] = projection?.translate() ?? [0, 0];
-
-  const pins = useMemo<ProjectedPin[]>(() => {
-    if (!projection) return [];
-    const clusters = new Map<string, LocatedFigure[]>();
-    for (const entry of located) {
-      const key = originClusterKey(entry.origin);
-      const group = clusters.get(key);
-      if (group) group.push(entry);
-      else clusters.set(key, [entry]);
-    }
-
-    const next: ProjectedPin[] = [];
-    for (const group of clusters.values()) {
-      group.forEach((entry, clusterIndex) => {
-        const point = projection([entry.origin.lng, entry.origin.lat]);
-        const visible =
-          Boolean(point) &&
-          (!isGlobe || isOnFront(projection, entry.origin.lng, entry.origin.lat));
-        const offset = originFanOffset(clusterIndex, group.length);
-        next.push({
-          ...entry,
-          x: (point?.[0] ?? 0) + offset.dx,
-          y: (point?.[1] ?? 0) + offset.dy,
-          visible,
-          clusterIndex,
-          clusterCount: group.length,
-        });
-      });
-    }
-    return next;
-  }, [isGlobe, located, projection]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    setPins(projectPins(map, located));
+  }, [located, mapReady]);
 
   const places = useMemo(() => {
     const seen = new Map<string, OrnamentOrigin>();
     for (const entry of located) {
-      if (!seen.has(entry.origin.label)) seen.set(entry.origin.label, entry.origin);
+      if (!seen.has(entry.origin.label)) {
+        seen.set(entry.origin.label, entry.origin);
+      }
     }
     return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
   }, [located]);
@@ -229,50 +231,16 @@ export function IndexMapView({
   const active =
     pins.find((pin) => pin.figure.source.id === activeId) ?? pins[0] ?? null;
 
-  function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!isGlobe || event.button !== 0) return;
-    if ((event.target as HTMLElement | null)?.closest("a")) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    dragRef.current = {
-      pointerId: event.pointerId,
-      x: event.clientX,
-      y: event.clientY,
-    };
-    setGrabbing(true);
-  }
-
-  function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const dx = event.clientX - drag.x;
-    const dy = event.clientY - drag.y;
-    drag.x = event.clientX;
-    drag.y = event.clientY;
-    setDragRotation((current) => {
-      const [lambda, phi] = current ?? defaultRotation;
-      return [
-        lambda + dx * 0.38,
-        Math.max(-68, Math.min(68, phi - dy * 0.38)),
-      ];
-    });
-  }
-
-  function endDrag(event: ReactPointerEvent<HTMLDivElement>) {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    dragRef.current = null;
-    setGrabbing(false);
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  }
-
   function focusPlace(origin: OrnamentOrigin) {
     const match = located.find((entry) => entry.origin.label === origin.label);
     if (match) setActiveId(match.figure.source.id);
-    if (isGlobe) {
-      setDragRotation([-origin.lng, -origin.lat]);
-    }
+    const map = mapRef.current;
+    if (!map) return;
+    map.easeTo({
+      center: [origin.lng, origin.lat],
+      duration: reduceMotion ? 0 : 700,
+      zoom: Math.max(map.getZoom(), isGlobe ? 2.4 : map.getZoom()),
+    });
   }
 
   const captionTitle = active
@@ -289,53 +257,20 @@ export function IndexMapView({
   return (
     <div className="ornament-index-map">
       <div
-        ref={stageRef}
         className={`ornament-index-map-stage ${
           isGlobe ? "is-globe" : "is-sheet"
-        } ${grabbing ? "is-grabbing" : ""}`}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
+        }`}
       >
-        {size ? (
-          <svg
-            className="ornament-index-map-svg"
-            viewBox={`0 0 ${size.width} ${size.height}`}
-            role="img"
-            aria-label={
-              isGlobe
-                ? "Globe showing where each ornament originates"
-                : "Map showing where the selected ornaments originate"
-            }
-          >
-            {isGlobe && spherePath ? (
-              <path className="ornament-index-map-ocean" d={spherePath} />
-            ) : null}
-            {graticulePath ? (
-              <path className="ornament-index-map-graticule" d={graticulePath} />
-            ) : null}
-            {landPath ? (
-              <path className="ornament-index-map-land" d={landPath} />
-            ) : null}
-            {isGlobe && spherePath ? (
-              <path className="ornament-index-map-limb" d={spherePath} />
-            ) : null}
-          </svg>
-        ) : null}
-
-        {isGlobe && size ? (
-          <div
-            aria-hidden
-            className="ornament-index-map-sheen"
-            style={{
-              width: globeRadius * 2,
-              height: globeRadius * 2,
-              left: tx - globeRadius,
-              top: ty - globeRadius,
-            }}
-          />
-        ) : null}
+        <div
+          ref={mapNodeRef}
+          className="ornament-index-map-canvas"
+          role="img"
+          aria-label={
+            isGlobe
+              ? "Globe showing where each ornament originates"
+              : "Map showing where the selected ornaments originate"
+          }
+        />
 
         {pins.map((pin) => {
           const selected = pin.figure.source.id === active?.figure.source.id;
@@ -356,9 +291,7 @@ export function IndexMapView({
               aria-current={selected ? "true" : undefined}
               tabIndex={pin.visible ? 0 : -1}
               onMouseEnter={() => setActiveId(pin.figure.source.id)}
-              onFocus={() => {
-                setActiveId(pin.figure.source.id);
-              }}
+              onFocus={() => setActiveId(pin.figure.source.id)}
             >
               <span className="ornament-index-map-pin-plate">
                 {pin.figure.source.imageUrl ? (
@@ -390,15 +323,17 @@ export function IndexMapView({
       >
         <span className="ornament-index-map-legend-count">
           {located.length} {located.length === 1 ? "origin" : "origins"}
-          {unlocatedCount
-            ? ` · ${unlocatedCount} unlocated`
-            : ""}
+          {unlocatedCount ? ` · ${unlocatedCount} unlocated` : ""}
         </span>
         {places.map((place, index) => {
           const selected = active?.origin.label === place.label;
           return (
             <span key={place.label}>
-              {index === 0 ? <span aria-hidden> · </span> : <span aria-hidden>, </span>}
+              {index === 0 ? (
+                <span aria-hidden> · </span>
+              ) : (
+                <span aria-hidden>, </span>
+              )}
               <button
                 type="button"
                 aria-pressed={selected}

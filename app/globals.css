@@ -386,61 +386,41 @@ body {
   height: min(72vh, 44rem);
   min-height: 22rem;
   overflow: hidden;
-  touch-action: none;
-  cursor: grab;
-  user-select: none;
+  background: var(--paper);
 }
 
-.ornament-index-map-stage.is-sheet {
-  cursor: default;
-  touch-action: auto;
+.ornament-index-map-canvas {
+  position: absolute;
+  inset: 0;
 }
 
-.ornament-index-map-stage.is-grabbing {
-  cursor: grabbing;
-}
-
-.ornament-index-map-svg {
-  display: block;
+.ornament-index-map-stage .maplibregl-canvas,
+.ornament-index-map-stage .maplibregl-canvas-container {
   width: 100%;
   height: 100%;
 }
 
-.ornament-index-map-ocean {
-  fill: color-mix(in srgb, var(--ink) 5%, var(--paper));
+.ornament-index-map-stage .maplibregl-ctrl-attrib {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  color: color-mix(in srgb, var(--ink) 45%, transparent);
 }
 
-.ornament-index-map-land {
-  fill: color-mix(in srgb, var(--ink) 14%, var(--paper));
-  stroke: color-mix(in srgb, var(--ink) 28%, transparent);
-  stroke-width: 0.6;
+.ornament-index-map-stage .maplibregl-ctrl-attrib a {
+  color: inherit;
 }
 
-.ornament-index-map-graticule {
-  fill: none;
-  stroke: color-mix(in srgb, var(--ink) 12%, transparent);
-  stroke-width: 0.45;
-}
-
-.ornament-index-map-limb {
-  fill: none;
-  stroke: color-mix(in srgb, var(--ink) 38%, transparent);
-  stroke-width: 1;
-}
-
-.ornament-index-map-sheen {
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-  background: radial-gradient(
-    circle at 32% 28%,
-    color-mix(in srgb, white 38%, transparent),
-    transparent 58%
-  );
+.ornament-index-map-stage .maplibregl-ctrl-bottom-left,
+.ornament-index-map-stage .maplibregl-ctrl-bottom-right {
+  z-index: 1;
 }
 
 .ornament-index-map-pin {
   position: absolute;
+  z-index: 3;
   width: 2.15rem;
   height: 2.65rem;
   transform: translate(-50%, -50%) scale(0.92);

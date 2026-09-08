@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { geoEquirectangular } from "d3-geo";
 import {
+  originCameraLngLat,
+  originFitBounds,
   originFitGeometry,
   resolveOrnamentOrigin,
 } from "./origins";
@@ -129,6 +130,14 @@ test("every catalog source resolves to an origin", () => {
   );
 });
 
+test("camera center faces the origin cluster", () => {
+  const paris = resolveOrnamentOrigin(stubSource({ region: "French" }));
+  assert.ok(paris);
+  const [lng, lat] = originCameraLngLat([paris]);
+  assert.ok(Math.abs(lng - paris.lng) < 1);
+  assert.ok(Math.abs(lat - paris.lat) < 1);
+});
+
 test("regional map fit zooms to the selection instead of the world", () => {
   const france = resolveOrnamentOrigin(stubSource({ region: "French" }));
   const naples = resolveOrnamentOrigin(
@@ -141,22 +150,7 @@ test("regional map fit zooms to the selection instead of the world", () => {
   const span = Math.max(...lngs) - Math.min(...lngs);
   assert.ok(span < 80, `expected a regional lng span, got ${span}`);
 
-  const fitted = geoEquirectangular().fitExtent(
-    [
-      [48, 40],
-      [1152, 504],
-    ],
-    geometry,
-  );
-  const world = geoEquirectangular().fitExtent(
-    [
-      [48, 40],
-      [1152, 504],
-    ],
-    { type: "Sphere" },
-  );
-  assert.ok(
-    fitted.scale() > world.scale() * 3,
-    `expected a zoomed map (fitted ${fitted.scale()} vs world ${world.scale()})`,
-  );
+  const bounds = originFitBounds([france, naples]);
+  assert.ok(bounds[1][0] - bounds[0][0] < 80);
+  assert.ok(bounds[1][1] - bounds[0][1] < 50);
 });
