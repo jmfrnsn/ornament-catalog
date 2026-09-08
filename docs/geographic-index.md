@@ -13,6 +13,8 @@ The reviewed active set has no museum-confirmed places of creation. The geograph
 ## Interaction
 
 - Select a region using a country, count marker or region button.
+- Selecting a region animates the camera to center and zoom into that country in either projection. Reset and All regions restore the overview; manual controls interrupt camera motion.
+- Floating labels are 28px high. Connectors meet the facing edge, avoid rounded corners and stay anchored during entrance animations; placement also discourages lines crossing other labels.
 - Region names are uppercase, and the selection grid has 2px gaps between hover backgrounds.
 - Region/count labels float above the globe and map, with collision avoidance, anchored pins, subtle shadows, and a spring entrance when they rotate or scroll into view. Reduced-motion preferences disable the animation.
 - The SVG viewBox and projection follow the actual canvas width and height, so Mercator maps fill the pane rather than sitting inside a fixed-aspect-ratio box.

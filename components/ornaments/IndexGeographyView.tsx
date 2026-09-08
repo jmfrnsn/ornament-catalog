@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion, useInView, useReducedMotion } from "motion/react";
+import { animate, AnimatePresence, motion, useInView, useReducedMotion } from "motion/react";
 import { geoDistance, geoGraticule10, geoMercator, geoOrthographic, geoPath } from "d3-geo";
 import { feature } from "topojson-client";
 import type { GeometryCollection, Topology } from "topojson-specification";
@@ -13,13 +13,14 @@ import { ArchiveSourceButton } from "./ArchiveSourceButton";
 import { OrnamentImage } from "./OrnamentImage";
 import type { OrnamentFigure } from "@/lib/ornaments/figure-catalog";
 import { geographicDisplayMode, groupFigureOrigins, type OriginGroup } from "@/lib/ornaments/geography";
-import { placeGeographyLabels } from "@/lib/ornaments/geography-labels";
+import { geographyLabelConnector, placeGeographyLabels } from "@/lib/ornaments/geography-labels";
 import "./geography.css";
 
 const topology = world as unknown as Topology<{ countries: GeometryCollection<{ name: string }> }>;
 const countries = feature(topology, topology.objects.countries).features;
 const graticule = geoGraticule10();
 const BASE_ROTATION: [number, number] = [-50, -30];
+const MAX_ZOOM = 8;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 type Props = {
@@ -35,6 +36,16 @@ function mainPolygon(country: Feature<Geometry>) {
   const polygons = country.geometry.coordinates;
   const largest = [...polygons].sort((a, b) => b[0].length - a[0].length)[0];
   return { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: largest } } as Feature<Geometry>;
+}
+
+function regionalProjection(groups: OriginGroup[], width: number, height: number) {
+  const codes = new Set(groups.map(group => group.region.code));
+  const selection = countries.filter(country => codes.has(String(country.id))).map(mainPolygon);
+  const map = geoMercator();
+  if (selection.length) {
+    map.fitExtent([[32, 32], [width - 32, height - 64]], { type: "FeatureCollection", features: selection });
+  } else map.center([10, 46]).scale(480).translate([width / 2, height / 2]);
+  return map;
 }
 
 export function IndexGeographyView(props: Props) {
@@ -59,6 +70,8 @@ function GeographyPanel({
   const [rotation, setRotation] = useState<[number, number]>(BASE_ROTATION);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState<[number, number]>([0, 0]);
+  const cameraAnimation = useRef<{ stop: () => void } | null>(null);
+  useEffect(() => () => cameraAnimation.current?.stop(), []);
   const drag = useRef<{ x: number; y: number; rotation: [number, number]; pan: [number, number]; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
   useEffect(() => {
@@ -90,17 +103,7 @@ function GeographyPanel({
         .scale(Math.min(WIDTH, HEIGHT) * .43 * zoom)
         .clipExtent([[0, 0], [WIDTH, HEIGHT]]);
     }
-    const codes = new Set(groups.map((group) => group.region.code));
-    const regionalCountries = countries.filter((country) => codes.has(String(country.id))).map(mainPolygon);
-    const map = geoMercator();
-    if (regionalCountries.length) {
-      map.fitExtent(
-        [[32, 32], [WIDTH - 32, HEIGHT - 64]],
-        { type: "FeatureCollection", features: regionalCountries },
-      );
-    } else {
-      map.center([10, 46]).scale(480).translate([WIDTH / 2, HEIGHT / 2]);
-    }
+    const map = regionalProjection(groups, WIDTH, HEIGHT);
     const translation = map.translate();
     return map
       .scale(map.scale() * zoom)
@@ -123,30 +126,60 @@ function GeographyPanel({
   const markers = placeGeographyLabels(pins, WIDTH, HEIGHT);
   const reveal = { opacity: reduceMotion || inView ? 1 : 0, scale: reduceMotion || inView ? 1 : .86 };
 
+  function moveCamera(targetRotation: [number, number], targetZoom: number, targetPan: [number, number]) {
+    cameraAnimation.current?.stop();
+    const longitude = rotation[0] + ((targetRotation[0] - rotation[0]) % 360 + 540) % 360 - 180;
+    const update = (t: number) => {
+      setRotation([rotation[0] + (longitude - rotation[0]) * t, rotation[1] + (targetRotation[1] - rotation[1]) * t]);
+      setZoom(zoom + (targetZoom - zoom) * t);
+      setPan([pan[0] + (targetPan[0] - pan[0]) * t, pan[1] + (targetPan[1] - pan[1]) * t]);
+    };
+    if (reduceMotion) update(1);
+    else cameraAnimation.current = animate(0, 1, { duration: .65, ease: [.22, 1, .36, 1], onUpdate: update });
+  }
+
   function chooseRegion(group: OriginGroup) {
     setSelectedCode(group.region.code);
     setActiveId(group.items[0]?.figure.source.id ?? null);
+    const targetRotation: [number, number] = [-group.region.coordinates[0], -group.region.coordinates[1]];
+    const base = isGlobe
+      ? geoOrthographic().rotate(targetRotation).translate([WIDTH / 2, HEIGHT / 2]).scale(Math.min(WIDTH, HEIGHT) * .43)
+      : regionalProjection(groups, WIDTH, HEIGHT);
+    const country = countries.find(item => String(item.id) === group.region.code);
+    let targetZoom = 2.5;
+    if (country) {
+      const [[x0, y0], [x1, y1]] = geoPath(base).bounds(mainPolygon(country));
+      targetZoom = clamp(Math.min((WIDTH - 120) / Math.max(1, x1 - x0), (HEIGHT - 140) / Math.max(1, y1 - y0)), 1.5, MAX_ZOOM);
+    }
     if (isGlobe) {
-      setRotation([-group.region.coordinates[0], -group.region.coordinates[1]]);
-      setZoom(1);
+      moveCamera(targetRotation, targetZoom, [0, 0]);
+    } else {
+      const point = base(group.region.coordinates) ?? [WIDTH / 2, HEIGHT / 2];
+      moveCamera(rotation, targetZoom, [(WIDTH / 2 - point[0]) * targetZoom, (HEIGHT / 2 - point[1]) * targetZoom - 16]);
     }
   }
 
   function resetView() {
-    setRotation(BASE_ROTATION);
-    setZoom(1);
-    setPan([0, 0]);
+    moveCamera(BASE_ROTATION, 1, [0, 0]);
     setSelectedCode(null);
     setActiveId(null);
   }
 
+  function changeZoom(delta: number) {
+    cameraAnimation.current?.stop();
+    const nextZoom = clamp(zoom + delta, .75, MAX_ZOOM);
+    setZoom(nextZoom);
+    if (!isGlobe) setPan([pan[0] * nextZoom / zoom, pan[1] * nextZoom / zoom]);
+  }
+
   function moveView(x: number, y: number) {
+    cameraAnimation.current?.stop();
     if (isGlobe) setRotation(([lon, lat]) => [lon + x, clamp(lat + y, -80, 80)]);
     else setPan(([px, py]) => [clamp(px + x * 5, -WIDTH * zoom, WIDTH * zoom), clamp(py + y * 5, -HEIGHT * zoom, HEIGHT * zoom)]);
   }
 
   return (
-    <section className="ornament-geography" aria-label="Ornament origins" data-testid="geography-view" data-mode={mode}>
+    <section className="ornament-geography" aria-label="Ornament origins" data-testid="geography-view" data-mode={mode} data-zoom={zoom.toFixed(3)}>
       <div className="ornament-geo-layout">
         <div className="ornament-geo-atlas">
           <div className="ornament-geo-canvas" ref={canvasRef}>
@@ -163,12 +196,13 @@ function GeographyPanel({
                 if (event.target !== event.currentTarget) return;
                 const moves: Record<string, [number, number]> = { ArrowLeft: [-10, 0], ArrowRight: [10, 0], ArrowUp: [0, -10], ArrowDown: [0, 10] };
                 if (moves[event.key]) { event.preventDefault(); moveView(...moves[event.key]); }
-                if (event.key === "+" || event.key === "=") { event.preventDefault(); setZoom((value) => clamp(value + 0.25, 0.75, 2.5)); }
-                if (event.key === "-") { event.preventDefault(); setZoom((value) => clamp(value - 0.25, 0.75, 2.5)); }
+                if (event.key === "+" || event.key === "=") { event.preventDefault(); changeZoom(.25); }
+                if (event.key === "-") { event.preventDefault(); changeZoom(-.25); }
                 if (event.key === "Home") { event.preventDefault(); resetView(); }
               }}
               onPointerDown={(event) => {
                 if (event.button !== 0 || (event.target as Element).closest('[role="button"]')) return;
+                cameraAnimation.current?.stop();
                 event.currentTarget.setPointerCapture(event.pointerId);
                 suppressClick.current = false;
                 drag.current = { x: event.clientX, y: event.clientY, rotation, pan, moved: false };
@@ -221,25 +255,26 @@ function GeographyPanel({
                     </path>
                   );
                 })}
-                {markers.map(({ code, x, y, left, top, width, height }) => {
-                  const endX = left + width / 2 > x ? left : left + width;
-                  const endY = clamp(y, top + 8, top + height - 8);
-                  return <g key={code} className={`ornament-geo-pin${code === activeCode ? " is-active" : ""}`} aria-hidden="true">
-                    <path d={`M${x},${y} L${endX},${endY}`} />
-                    <circle cx={x} cy={y} r={3} />
+                {markers.map((marker) => {
+                  const line = geographyLabelConnector(marker);
+                  return <g key={marker.code} className={`ornament-geo-pin${marker.code === activeCode ? " is-active" : ""}`} aria-hidden="true">
+                    {line && <path data-testid={`map-connector-${marker.code}`} d={`M${line.x1},${line.y1} L${line.x2},${line.y2}`} />}
+                    <circle cx={marker.x} cy={marker.y} r={3} />
                   </g>;
                 })}
               </g>
             </svg>
             <div className="ornament-geo-labels" data-testid="floating-region-labels">
               <AnimatePresence>
-                {markers.map(({ code, left, top, width, height }, index) => {
+                {markers.map((marker, index) => {
+                  const { code, left, top, width, height } = marker;
+                  const line = geographyLabelConnector(marker);
                   const group = groupByCode.get(code)!;
                   return <motion.button
                     key={code}
                     type="button"
                     className={`ornament-geo-label${code === activeCode ? " is-active" : ""}${compact ? " is-compact" : ""}`}
-                    style={{ left, top, width, height }}
+                    style={{ left, top, width, height, transformOrigin: line ? `${line.x2 - left}px ${line.y2 - top}px` : "center" }}
                     aria-label={`${group.region.name}, ${group.items.length} specimens`}
                     aria-pressed={selectedCode === code}
                     data-testid={`map-marker-${code}`}
@@ -247,7 +282,6 @@ function GeographyPanel({
                     animate={reveal}
                     exit={{ opacity: 0, scale: reduceMotion ? 1 : .94, transition: { duration: reduceMotion ? 0 : .12 } }}
                     transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 340, damping: 24, delay: index * .025 }}
-                    whileHover={reduceMotion ? undefined : { scale: 1.025 }}
                     whileTap={reduceMotion ? undefined : { scale: .97 }}
                     onClick={() => chooseRegion(group)}
                   >
@@ -263,8 +297,8 @@ function GeographyPanel({
               initial={reduceMotion ? false : { opacity: 0, scale: .94 }}
               animate={reveal}
               transition={{ duration: reduceMotion ? 0 : .3, ease: [.22, 1, .36, 1] }}>
-              <button type="button" aria-label="Zoom in" disabled={zoom >= 2.5} onClick={() => setZoom((value) => clamp(value + 0.25, 0.75, 2.5))}>+</button>
-              <button type="button" aria-label="Zoom out" disabled={zoom <= 0.75} onClick={() => setZoom((value) => clamp(value - 0.25, 0.75, 2.5))}>−</button>
+              <button type="button" aria-label="Zoom in" disabled={zoom >= MAX_ZOOM} onClick={() => changeZoom(.25)}>+</button>
+              <button type="button" aria-label="Zoom out" disabled={zoom <= .75} onClick={() => changeZoom(-.25)}>−</button>
               <button type="button" className="ornament-geo-reset" onClick={resetView}>Reset</button>
             </motion.div>
             <a className="ornament-geo-credit" href="https://www.naturalearthdata.com/" target="_blank" rel="noreferrer">Natural Earth</a>
@@ -274,7 +308,7 @@ function GeographyPanel({
 
         <aside className="ornament-geo-sidebar" aria-label="Specimens by origin" data-testid="geography-sidebar">
           <div className="ornament-geo-region-list" role="group" aria-label="Select origin region">
-            <button type="button" aria-pressed={selectedCode === null} onClick={() => { setSelectedCode(null); setActiveId(null); }}>
+            <button type="button" aria-pressed={selectedCode === null} onClick={resetView}>
               <span>All regions</span><span>{figures.length}</span>
             </button>
             {groups.map((group) => (

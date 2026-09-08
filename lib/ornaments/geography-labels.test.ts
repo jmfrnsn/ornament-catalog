@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { placeGeographyLabels } from "./geography-labels";
+import { geographyLabelConnector, placeGeographyLabels } from "./geography-labels";
 
 test("floating labels stay in the viewport, avoid the controls and do not overlap", () => {
   for (const [width, height] of [[950, 648], [480, 560], [375, 380], [560, 504]]) {
@@ -10,6 +10,7 @@ test("floating labels stay in the viewport, avoid the controls and do not overla
     assert.equal(result.length, pins.length);
     for (const label of result) {
       assert.ok(label.left >= 12 && label.left + label.width <= width - 12);
+      assert.equal(label.height, 28);
       assert.ok(label.top >= 12 && label.top + label.height <= height - 76);
       for (const other of result) {
         if (label.code === other.code) continue;
@@ -20,6 +21,30 @@ test("floating labels stay in the viewport, avoid the controls and do not overla
     }
     assert.deepEqual(result, placeGeographyLabels(pins, width, height));
   }
+});
+
+test("connectors attach to the facing top, bottom, left or right edge", () => {
+  const label = {code:"1",name:"France",left:100,top:100,width:120,height:28};
+  for (const [x,y,endX,endY] of [
+    [160,50,160,100], [160,200,160,128], [50,114,100,114], [300,114,220,114],
+  ]) {
+    assert.deepEqual(geographyLabelConnector({...label,x,y}),{x1:x,y1:y,x2:endX,y2:endY});
+  }
+});
+
+test("diagonal connectors stop outside the text and clear rounded label corners", () => {
+  const label = {code:"1",name:"France",left:100,top:100,width:120,height:28};
+  for (const [x,y] of [[20,20],[300,20],[20,220],[300,220],[0,0]]) {
+    const line = geographyLabelConnector({...label,x,y})!;
+    assert.ok(line.x2 >= 100 && line.x2 <= 220 && line.y2 >= 100 && line.y2 <= 128);
+    assert.ok(line.x2===100 || line.x2===220 || line.y2===100 || line.y2===128);
+    if (line.y2===100 || line.y2===128) assert.ok(line.x2 >= 104 && line.x2 <= 216);
+    else assert.ok(line.y2 >= 104 && line.y2 <= 124);
+  }
+});
+
+test("a pin inside a label does not produce a reversed or zero-length connector", () => {
+  assert.equal(geographyLabelConnector({code:"1",name:"France",left:100,top:100,width:120,height:28,x:160,y:114}),null);
 });
 
 test("empty and edge-positioned pin selections are handled", () => {
